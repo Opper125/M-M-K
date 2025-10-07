@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MY MMK - Mining Platform</title>
+    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loader">
+            <div class="coin-loader"></div>
+            <p>Loading...</p>
+        </div>
+    </div>
+
+    <!-- Auth Container -->
+    <div id="authContainer" class="auth-container hidden">
+        <!-- Register Form -->
+        <div id="registerForm" class="auth-form">
+            <div class="auth-header">
+                <img id="siteLogo" src="" alt="Logo" class="site-logo">
+                <h1 id="siteName">MY MMK</h1>
+                <p>Create Your Mining Account</p>
+            </div>
+            <form id="registerFormElement">
+                <div class="form-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="regUsername" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="regPassword" placeholder="Login Password" required>
+                </div>
+                <div class="form-group">
+                    <i class="fas fa-key"></i>
+                    <input type="password" id="regPin" placeholder="Withdrawal PIN (6 digits)" maxlength="6" pattern="[0-9]{6}" required>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <span>Create Account</span>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </form>
+            <p class="auth-switch">Already have an account? <a href="#" id="showLogin">Login</a></p>
+        </div>
+
+        <!-- Login Form -->
+        <div id="loginForm" class="auth-form hidden">
+            <div class="auth-header">
+                <img id="siteLogoLogin" src="" alt="Logo" class="site-logo">
+                <h1 id="siteNameLogin">MY MMK</h1>
+                <p>Login to Your Account</p>
+            </div>
+            <form id="loginFormElement">
+                <div class="form-group">
+                    <i class="fas fa-user"></i>
+                    <input type="text" id="loginUsername" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <span>Login</span>
+                    <i class="fas fa-sign-in-alt"></i>
+                </button>
+            </form>
+            <p class="auth-switch">Don't have an account? <a href="#" id="showRegister">Register</a></p>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div id="mainDashboard" class="dashboard hidden">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="header-content">
+                <img id="dashboardLogo" src="" alt="Logo" class="header-logo">
+                <h2 id="dashboardSiteName">MY MMK</h2>
+            </div>
+            <div class="header-balance">
+                <div class="balance-item">
+                    <span>Balance</span>
+                    <h3 id="userBalance">0</h3>
+                </div>
+                <div class="balance-item">
+                    <span>Total Coins</span>
+                    <h3 id="userTotalCoins">0</h3>
+                </div>
+            </div>
+        </header>
+
+        <!-- Pages Container -->
+        <main class="pages-container">
+            <!-- Mining Page -->
+            <div id="miningPage" class="page active">
+                <div class="mining-container">
+                    <div class="mining-stats">
+                        <div class="stat-card">
+                            <i class="fas fa-coins"></i>
+                            <div>
+                                <span>Balance</span>
+                                <h3 id="miningBalance">0 MMK</h3>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <i class="fas fa-chart-line"></i>
+                            <div>
+                                <span>Total Mined</span>
+                                <h3 id="miningTotal">0 MMK</h3>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mining-main">
+                        <div class="mining-display" id="activeMiningDisplay">
+                            <div class="mining-icon" id="miningIcon">
+                                <i class="fas fa-pickaxe"></i>
+                            </div>
+                            <div class="mining-info">
+                                <h4 id="miningTypeName">Start Mining</h4>
+                                <p id="miningRate">Click to start</p>
+                                <div class="progress-bar hidden" id="miningProgress">
+                                    <div class="progress-fill"></div>
+                                </div>
+                                <p id="miningAmount">0 MMK</p>
+                                <p id="miningTimer"></p>
+                            </div>
+                            <button id="startMiningBtn" class="btn-mining">
+                                <i class="fas fa-play"></i> Start Free Mining
+                            </button>
+                        </div>
+
+                        <!-- Secondary Mining (when plan is active) -->
+                        <div class="secondary-mining hidden" id="secondaryMining">
+                            <div class="mini-mining-card" id="secondaryMiningCard">
+                                <i class="fas fa-coins"></i>
+                                <div>
+                                    <span id="secondaryMiningName">Plan Mining</span>
+                                    <p id="secondaryMiningAmount">0 MMK</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plan Page -->
+            <div id="planPage" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-gem"></i> Mining Plans</h2>
+                </div>
+                <div class="plans-grid" id="plansContainer">
+                    <!-- Plans will be loaded here -->
+                </div>
+            </div>
+
+            <!-- History Page -->
+            <div id="historyPage" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-history"></i> Mining History</h2>
+                </div>
+                <div class="history-tabs">
+                    <button class="tab-btn active" data-tab="planHistory">Plan Mining</button>
+                    <button class="tab-btn" data-tab="freeHistory">Free Mining</button>
+                    <button class="tab-btn" data-tab="purchaseHistory">Purchases</button>
+                </div>
+                <div class="history-content">
+                    <div id="planHistory" class="history-tab active">
+                        <!-- Plan mining history -->
+                    </div>
+                    <div id="freeHistory" class="history-tab">
+                        <!-- Free mining history -->
+                    </div>
+                    <div id="purchaseHistory" class="history-tab">
+                        <!-- Purchase history -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contacts Page -->
+            <div id="contactsPage" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-address-book"></i> Contact Us</h2>
+                </div>
+                <div class="contacts-grid" id="contactsContainer">
+                    <!-- Contacts will be loaded here -->
+                </div>
+            </div>
+
+            <!-- News Page -->
+            <div id="newsPage" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-newspaper"></i> News & Updates</h2>
+                </div>
+                <div class="news-container" id="newsContainer">
+                    <!-- News will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Profile Page -->
+            <div id="profilePage" class="page">
+                <div class="page-header">
+                    <h2><i class="fas fa-user-circle"></i> My Profile</h2>
+                </div>
+                <div class="profile-content">
+                    <div class="profile-balance-card">
+                        <i class="fas fa-wallet"></i>
+                        <div>
+                            <span>Current Balance</span>
+                            <h2 id="profileBalance">0 MMK</h2>
+                        </div>
+                        <button id="withdrawBtn" class="btn-withdraw">
+                            <i class="fas fa-money-bill-wave"></i> Withdraw
+                        </button>
+                    </div>
+
+                    <div class="profile-info">
+                        <h3>Account Information</h3>
+                        <div class="info-group">
+                            <label>Username</label>
+                            <input type="text" id="profileUsername" readonly>
+                        </div>
+                        <div class="info-group">
+                            <label>New Password (optional)</label>
+                            <input type="password" id="profileNewPassword" placeholder="Leave empty to keep current">
+                        </div>
+                        <div class="info-group">
+                            <label>New PIN (optional)</label>
+                            <input type="password" id="profileNewPin" placeholder="6 digits" maxlength="6">
+                        </div>
+                        <button id="updateProfileBtn" class="btn-primary">
+                            <i class="fas fa-save"></i> Update Profile
+                        </button>
+                    </div>
+
+                    <div class="withdrawal-history">
+                        <h3>Withdrawal History</h3>
+                        <div id="withdrawalHistoryContainer">
+                            <!-- Withdrawal history -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+            <button class="nav-btn active" data-page="miningPage">
+                <i class="fas fa-pickaxe"></i>
+                <span>Mining</span>
+            </button>
+            <button class="nav-btn" data-page="planPage">
+                <i class="fas fa-gem"></i>
+                <span>Plan</span>
+            </button>
+            <button class="nav-btn" data-page="historyPage">
+                <i class="fas fa-history"></i>
+                <span>History</span>
+            </button>
+            <button class="nav-btn" data-page="contactsPage">
+                <i class="fas fa-address-book"></i>
+                <span>Contacts</span>
+            </button>
+            <button class="nav-btn" data-page="newsPage">
+                <i class="fas fa-newspaper"></i>
+                <span>News</span>
+            </button>
+            <button class="nav-btn" data-page="profilePage">
+                <i class="fas fa-user"></i>
+                <span>Profile</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Modals -->
+    <!-- Plan Purchase Modal -->
+    <div id="planPurchaseModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2><i class="fas fa-shopping-cart"></i> Purchase Plan</h2>
+            <div id="planPurchaseContent">
+                <!-- Payment options will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Withdrawal Modal -->
+    <div id="withdrawalModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2><i class="fas fa-money-bill-wave"></i> Withdraw Funds</h2>
+            <form id="withdrawalForm">
+                <div class="form-group">
+                    <label>Available Balance</label>
+                    <h3 id="withdrawAvailableBalance">0 MMK</h3>
+                </div>
+                <div class="form-group">
+                    <label>Withdrawal Amount (100,000 - 1,000,000 MMK)</label>
+                    <input type="number" id="withdrawAmount" min="100000" max="1000000" required>
+                </div>
+                <div class="form-group">
+                    <label>Payment Type</label>
+                    <input type="text" id="withdrawPaymentType" placeholder="e.g., KBZPay, WavePay" required>
+                </div>
+                <div class="form-group">
+                    <label>Account Name</label>
+                    <input type="text" id="withdrawAccountName" required>
+                </div>
+                <div class="form-group">
+                    <label>Payment Address</label>
+                    <input type="text" id="withdrawPaymentAddress" required>
+                </div>
+                <div class="form-group">
+                    <label>Withdrawal PIN</label>
+                    <input type="password" id="withdrawPin" maxlength="6" required>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-paper-plane"></i> Submit Request
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="index.js"></script>
+</body>
+</html>
