@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - MY MMK</title>
+    <link rel="stylesheet" href="admin.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen">
+        <div class="loader">
+            <div class="spinner"></div>
+            <p>Loading Admin Panel...</p>
+        </div>
+    </div>
+
+    <!-- Admin Login -->
+    <div id="adminLogin" class="admin-login hidden">
+        <div class="login-container">
+            <div class="login-header">
+                <i class="fas fa-shield-halved"></i>
+                <h1>Admin Access</h1>
+                <p>Enter Admin Password</p>
+            </div>
+            <form id="adminLoginForm">
+                <div class="form-group">
+                    <i class="fas fa-lock"></i>
+                    <input type="password" id="adminPassword" placeholder="Admin Password" required>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <span>Login</span>
+                </button>
+            </form>
+            <div id="loginRequestInfo" class="login-request-info hidden">
+                <p>Your login request has been sent.</p>
+                <p>Waiting for approval from authorized device...</p>
+                <div class="request-spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Dashboard -->
+    <div id="adminDashboard" class="admin-dashboard hidden">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <i class="fas fa-crown"></i>
+                <h2>Admin Panel</h2>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-link active" data-section="dashboard">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#" class="nav-link" data-section="loginRequests">
+                    <i class="fas fa-user-check"></i>
+                    <span>Login Requests</span>
+                    <span class="badge" id="requestsBadge">0</span>
+                </a>
+                <a href="#" class="nav-link" data-section="settings">
+                    <i class="fas fa-cog"></i>
+                    <span>Site Settings</span>
+                </a>
+                <a href="#" class="nav-link" data-section="miningUI">
+                    <i class="fas fa-image"></i>
+                    <span>Mining UI</span>
+                </a>
+                <a href="#" class="nav-link" data-section="freeMining">
+                    <i class="fas fa-clock"></i>
+                    <span>Free Mining</span>
+                </a>
+                <a href="#" class="nav-link" data-section="plans">
+                    <i class="fas fa-gem"></i>
+                    <span>Plans</span>
+                </a>
+                <a href="#" class="nav-link" data-section="payments">
+                    <i class="fas fa-credit-card"></i>
+                    <span>Payments</span>
+                </a>
+                <a href="#" class="nav-link" data-section="contacts">
+                    <i class="fas fa-address-book"></i>
+                    <span>Contacts</span>
+                </a>
+                <a href="#" class="nav-link" data-section="news">
+                    <i class="fas fa-newspaper"></i>
+                    <span>News</span>
+                </a>
+                <a href="#" class="nav-link" data-section="users">
+                    <i class="fas fa-users"></i>
+                    <span>Users</span>
+                </a>
+                <a href="#" class="nav-link" data-section="purchases">
+                    <i class="fas fa-shopping-cart"></i>
+                    <span>Plan Purchases</span>
+                    <span class="badge" id="purchasesBadge">0</span>
+                </a>
+                <a href="#" class="nav-link" data-section="withdrawals">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <span>Withdrawals</span>
+                    <span class="badge" id="withdrawalsBadge">0</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="content-section active">
+                <div class="section-header">
+                    <h1><i class="fas fa-chart-line"></i> Dashboard Overview</h1>
+                </div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalUsers">0</h3>
+                            <p>Total Users</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                            <i class="fas fa-gem"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="activePlans">0</h3>
+                            <p>Active Plans</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                            <i class="fas fa-coins"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalMined">0</h3>
+                            <p>Total Mined (MMK)</p>
+                        </div>
+                    </div>
+                    
+                    <div class="stat-card">
+                        <div class="stat-icon" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                            <i class="fas fa-money-bill-wave"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="totalRevenue">0</h3>
+                            <p>Total Revenue (MMK)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-clock"></i> Recent Activities</h3>
+                        <div id="recentActivities" class="activity-list"></div>
+                    </div>
+                    
+                    <div class="dashboard-card">
+                        <h3><i class="fas fa-exclamation-circle"></i> Pending Actions</h3>
+                        <div id="pendingActions" class="pending-list"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Login Requests Section -->
+            <section id="loginRequestsSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-user-check"></i> Admin Login Requests</h1>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>IP Address</th>
+                                <th>Browser Info</th>
+                                <th>Location</th>
+                                <th>Requested At</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="loginRequestsTable"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Site Settings Section -->
+            <section id="settingsSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-cog"></i> Site Settings</h1>
+                </div>
+                
+                <div class="settings-grid">
+                    <div class="settings-card">
+                        <h3><i class="fas fa-image"></i> Site Logo</h3>
+                        <div class="logo-preview" id="logoPreview">
+                            <i class="fas fa-image"></i>
+                            <p>No logo uploaded</p>
+                        </div>
+                        <input type="file" id="logoUpload" accept="image/*" class="hidden">
+                        <button onclick="document.getElementById('logoUpload').click()" class="btn-secondary">
+                            <i class="fas fa-upload"></i> Upload Logo
+                        </button>
+                    </div>
+                    
+                    <div class="settings-card">
+                        <h3><i class="fas fa-tag"></i> Site Name</h3>
+                        <div class="form-group">
+                            <input type="text" id="siteName" placeholder="Enter site name" value="MY MMK">
+                        </div>
+                        <button onclick="updateSiteName()" class="btn-primary">
+                            <i class="fas fa-save"></i> Save Name
+                        </button>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h3><i class="fas fa-key"></i> Admin Password Management</h3>
+                    <p class="text-muted">Create admin password for new device access</p>
+                    <div class="form-group">
+                        <label>New Admin Password</label>
+                        <input type="password" id="newAdminPassword" placeholder="Enter new password">
+                    </div>
+                    <div class="form-group">
+                        <label>Authorized Device IP</label>
+                        <input type="text" id="authorizedIP" placeholder="IP address of authorized device">
+                    </div>
+                    <button onclick="createAdminAuth()" class="btn-primary">
+                        <i class="fas fa-plus"></i> Create Admin Access
+                    </button>
+                </div>
+            </section>
+
+            <!-- Mining UI Section -->
+            <section id="miningUISection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-image"></i> Mining UI Settings</h1>
+                </div>
+                
+                <div class="ui-upload-card">
+                    <h3>Upload Mining Click UI</h3>
+                    <div class="ui-preview" id="miningUIPreview">
+                        <i class="fas fa-pickaxe"></i>
+                        <p>No UI uploaded</p>
+                    </div>
+                    <input type="file" id="miningUIUpload" accept="image/*" class="hidden">
+                    <button onclick="document.getElementById('miningUIUpload').click()" class="btn-primary">
+                        <i class="fas fa-upload"></i> Upload Mining UI
+                    </button>
+                </div>
+            </section>
+
+            <!-- Free Mining Section -->
+            <section id="freeMiningSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-clock"></i> Free Mining Settings</h1>
+                    <button onclick="showAddFreeMining()" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add Setting
+                    </button>
+                </div>
+                
+                <div id="freeMiningList" class="list-grid"></div>
+            </section>
+
+            <!-- Plans Section -->
+            <section id="plansSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-gem"></i> Mining Plans</h1>
+                    <button onclick="showAddPlan()" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add Plan
+                    </button>
+                </div>
+                
+                <div id="plansList" class="list-grid"></div>
+            </section>
+
+            <!-- Payments Section -->
+            <section id="paymentsSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-credit-card"></i> Payment Methods</h1>
+                    <button onclick="showAddPayment()" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add Payment
+                    </button>
+                </div>
+                
+                <div id="paymentsList" class="list-grid"></div>
+            </section>
+
+            <!-- Contacts Section -->
+            <section id="contactsSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-address-book"></i> Contacts</h1>
+                    <button onclick="showAddContact()" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add Contact
+                    </button>
+                </div>
+                
+                <div id="contactsList" class="list-grid"></div>
+            </section>
+
+            <!-- News Section -->
+            <section id="newsSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-newspaper"></i> News Management</h1>
+                    <button onclick="showAddNews()" class="btn-primary">
+                        <i class="fas fa-plus"></i> Add News
+                    </button>
+                </div>
+                
+                <div id="newsList" class="news-list"></div>
+            </section>
+
+            <!-- Users Section -->
+            <section id="usersSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-users"></i> User Management</h1>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>IP Address</th>
+                                <th>Balance</th>
+                                <th>Total Coins</th>
+                                <th>Registered</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Plan Purchases Section -->
+            <section id="purchasesSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-shopping-cart"></i> Plan Purchase Requests</h1>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Order #</th>
+                                <th>User</th>
+                                <th>Plan</th>
+                                <th>Payment</th>
+                                <th>Transaction</th>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="purchasesTable"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Withdrawals Section -->
+            <section id="withdrawalsSection" class="content-section">
+                <div class="section-header">
+                    <h1><i class="fas fa-money-bill-wave"></i> Withdrawal Requests</h1>
+                </div>
+                
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Amount</th>
+                                <th>Payment Type</th>
+                                <th>Account Name</th>
+                                <th>Address</th>
+                                <th>Requested</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="withdrawalsTable"></tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Free Mining Modal -->
+    <div id="freeMiningModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-clock"></i> Free Mining Setting</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="freeMiningForm">
+                    <div class="form-group">
+                        <label>Start Time</label>
+                        <input type="time" id="freeStartTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label>End Time</label>
+                        <input type="time" id="freeEndTime" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount (MMK)</label>
+                        <input type="number" id="freeAmount" placeholder="Enter amount" required>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Save Setting
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Plan Modal -->
+    <div id="planModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-gem"></i> <span id="planModalTitle">Add Plan</span></h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="planForm">
+                    <input type="hidden" id="planId">
+                    <div class="form-group">
+                        <label>Plan Name</label>
+                        <input type="text" id="planName" placeholder="Enter plan name" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Duration (Hours)</label>
+                        <input type="number" id="planDuration" placeholder="Enter duration in hours" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Total Mining Amount (MMK)</label>
+                        <input type="number" id="planAmount" placeholder="Enter total amount" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Price (MMK)</label>
+                        <input type="number" id="planPrice" placeholder="Enter plan price" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Plan UI Image</label>
+                        <div class="image-preview" id="planImagePreview"></div>
+                        <input type="file" id="planImage" accept="image/*">
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Save Plan
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-credit-card"></i> <span id="paymentModalTitle">Add Payment</span></h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="paymentForm">
+                    <input type="hidden" id="paymentId">
+                    <div class="form-group">
+                        <label>Payment Name</label>
+                        <input type="text" id="paymentName" placeholder="e.g., KBZPay" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Address</label>
+                        <input type="text" id="paymentAddress" placeholder="Enter payment address/number" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Instructions</label>
+                        <textarea id="paymentInstructions" rows="3" placeholder="Enter payment instructions"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Payment Icon</label>
+                        <div class="image-preview" id="paymentIconPreview"></div>
+                        <input type="file" id="paymentIcon" accept="image/*">
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Save Payment
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contact Modal -->
+    <div id="contactModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-address-book"></i> <span id="contactModalTitle">Add Contact</span></h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="contactForm">
+                    <input type="hidden" id="contactId">
+                    <div class="form-group">
+                        <label>Contact Name</label>
+                        <input type="text" id="contactName" placeholder="e.g., Telegram" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Link</label>
+                        <input type="url" id="contactLink" placeholder="https://..." required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="contactDescription" rows="2" placeholder="Enter description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Icon</label>
+                        <div class="image-preview" id="contactIconPreview"></div>
+                        <input type="file" id="contactIcon" accept="image/*">
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Save Contact
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- News Modal -->
+    <div id="newsModal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2><i class="fas fa-newspaper"></i> <span id="newsModalTitle">Add News</span></h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="newsForm">
+                    <input type="hidden" id="newsId">
+                    <div class="form-group">
+                        <label>News Title</label>
+                        <input type="text" id="newsTitle" placeholder="Enter news title" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Content</label>
+                        <textarea id="newsContent" rows="5" placeholder="Enter news content" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>YouTube Video URL (Optional)</label>
+                        <input type="url" id="newsYoutubeUrl" placeholder="https://youtube.com/watch?v=...">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Links (Select applicable)</label>
+                        <div id="newsContactsSelect" class="checkbox-group"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Upload Images (Max 10MB each, Total 50MB)</label>
+                        <input type="file" id="newsImages" accept="image/*" multiple>
+                        <div id="newsImagesPreview" class="images-preview"></div>
+                        <p class="file-size-info">Selected: <span id="imagesSizeInfo">0 MB</span> / 50 MB</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Upload Video (Max 50MB)</label>
+                        <input type="file" id="newsVideo" accept="video/*">
+                        <div id="newsVideoPreview" class="video-preview"></div>
+                        <p class="file-size-info">Selected: <span id="videoSizeInfo">0 MB</span> / 50 MB</p>
+                    </div>
+                    <button type="submit" class="btn-primary">
+                        <i class="fas fa-save"></i> Publish News
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast"></div>
+
+    <!-- Confirmation Dialog -->
+    <div id="confirmDialog" class="modal">
+        <div class="modal-content small">
+            <div class="modal-header">
+                <h2><i class="fas fa-exclamation-triangle"></i> Confirmation</h2>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage"></p>
+                <div class="modal-actions">
+                    <button class="btn-secondary" onclick="closeConfirmDialog()">Cancel</button>
+                    <button class="btn-danger" id="confirmBtn">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="admin.js"></script>
+</body>
+</html>
