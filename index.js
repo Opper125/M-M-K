@@ -1,5 +1,6 @@
 /* ======================================
    MY MMK - User Dashboard JavaScript
+   UPDATED VERSION WITH ALL FIXES
    ====================================== */
 
 // Supabase Configuration
@@ -19,7 +20,6 @@ let activeFreeSession = null;
 // UTILITY FUNCTIONS
 // ======================================
 
-// Show Toast Notification
 function showToast(message, type = 'success') {
     const toast = document.getElementById('toast');
     toast.textContent = message;
@@ -29,7 +29,6 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-// Format Currency
 function formatCurrency(amount) {
     return new Intl.NumberFormat('en-US', {
         minimumFractionDigits: 0,
@@ -37,21 +36,17 @@ function formatCurrency(amount) {
     }).format(amount);
 }
 
-// Format Date
 function formatDate(dateString) {
     const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
     return new Date(dateString).toLocaleDateString('en-US', options);
 }
 
-// Get User IP Address
 async function getUserIP() {
     try {
-        // Try to get local IP first (more reliable for device identification)
         const response = await fetch('https://api.ipify.org?format=json');
         const data = await response.json();
         return data.ip;
     } catch (error) {
-        // Fallback to generating a unique device ID
         let deviceId = localStorage.getItem('device_id');
         if (!deviceId) {
             deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -61,17 +56,17 @@ async function getUserIP() {
     }
 }
 
-// Check if IP is Banned
 async function checkIPBan(ip) {
     const { data, error } = await supabase
         .from('banned_ips')
         .select('*')
         .eq('ip_address', ip)
+        .eq('is_active', true)
         .single();
     
     if (data) {
         document.body.innerHTML = `
-            <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#0f172a;color:#f1f5f9;text-align:center;padding:20px;">
+            <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#0a0f1e;color:#f1f5f9;text-align:center;padding:20px;">
                 <div>
                     <i class="fas fa-ban" style="font-size:72px;color:#ef4444;margin-bottom:20px;"></i>
                     <h1 style="font-size:32px;margin-bottom:16px;">Access Denied</h1>
@@ -84,7 +79,6 @@ async function checkIPBan(ip) {
     }
 }
 
-// Update URL Path
 function updateURL(path) {
     window.history.pushState({}, '', path);
 }
@@ -93,10 +87,8 @@ function updateURL(path) {
 // AUTHENTICATION
 // ======================================
 
-// Register User
 async function registerUser(username, password, pin) {
     try {
-        // Check if username already exists
         const { data: existingUser } = await supabase
             .from('users')
             .select('id')
@@ -108,7 +100,6 @@ async function registerUser(username, password, pin) {
             return false;
         }
 
-        // Check if IP already has an account
         const { data: existingIP } = await supabase
             .from('users')
             .select('id')
@@ -120,12 +111,11 @@ async function registerUser(username, password, pin) {
             return false;
         }
 
-        // Create user
         const { data, error } = await supabase
             .from('users')
             .insert([{
                 username,
-                password, // In production, this should be hashed
+                password,
                 withdraw_pin: pin,
                 ip_address: userIP
             }])
@@ -136,7 +126,6 @@ async function registerUser(username, password, pin) {
 
         showToast('Account created successfully!', 'success');
         
-        // Auto login
         currentUser = data;
         localStorage.setItem('user_id', data.id);
         localStorage.setItem('user_ip', userIP);
@@ -150,7 +139,6 @@ async function registerUser(username, password, pin) {
     }
 }
 
-// Login User
 async function loginUser(username, password) {
     try {
         const { data, error } = await supabase
@@ -165,9 +153,7 @@ async function loginUser(username, password) {
             return false;
         }
 
-        // Check if IP matches
         if (data.ip_address !== userIP) {
-            // Attempt from different device - ban this IP
             await supabase
                 .from('banned_ips')
                 .insert([{
@@ -175,11 +161,10 @@ async function loginUser(username, password) {
                     reason: 'Unauthorized login attempt for user: ' + username
                 }]);
             
-            await checkIPBan(userIP); // This will block the page
+            await checkIPBan(userIP);
             return false;
         }
 
-        // Check if user is banned
         if (data.is_banned) {
             showToast('Your account has been banned', 'error');
             return false;
@@ -199,7 +184,6 @@ async function loginUser(username, password) {
     }
 }
 
-// Check Auto Login
 async function checkAutoLogin() {
     const savedUserId = localStorage.getItem('user_id');
     const savedIP = localStorage.getItem('user_ip');
@@ -225,29 +209,20 @@ async function checkAutoLogin() {
 // UI DISPLAY FUNCTIONS
 // ======================================
 
-// Show Dashboard
 async function showDashboard() {
     updateURL('/dashboard');
     document.getElementById('authContainer').classList.add('hidden');
     document.getElementById('mainDashboard').classList.remove('hidden');
     
-    // Load site settings
     await loadSiteSettings();
-    
-    // Update user balance
     updateUserBalance();
-    
-    // Load active mining sessions
-    await loadMiningeSessions();
-    
-    // Load plans
+    await loadMiningUI();
+    await loadMiningSessions();
     await loadPlans();
     
-    // Show mining page by default
     showPage('miningPage');
 }
 
-// Load Site Settings
 async function loadSiteSettings() {
     try {
         const { data: settings } = await supabase
@@ -256,7 +231,6 @@ async function loadSiteSettings() {
             .single();
 
         if (settings) {
-            // Update logos
             const logos = document.querySelectorAll('#siteLogo, #siteLogoLogin, #dashboardLogo');
             logos.forEach(logo => {
                 if (settings.logo_url) {
@@ -265,25 +239,40 @@ async function loadSiteSettings() {
                 }
             });
 
-            // Update site names
             const names = document.querySelectorAll('#siteName, #siteNameLogin, #dashboardSiteName');
             names.forEach(name => {
                 name.textContent = settings.site_name || 'MY MMK';
             });
         }
-
-        // Load button UI
-        const { data: buttonUI } = await supabase
-            .from('button_ui')
-            .select('*');
-
-        // Can customize button icons here if needed
     } catch (error) {
         console.error('Error loading site settings:', error);
     }
 }
 
-// Update User Balance Display
+// FIXED: Load Mining UI
+async function loadMiningUI() {
+    try {
+        const { data: ui } = await supabase
+            .from('mining_ui')
+            .select('*')
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        const miningIcon = document.getElementById('miningIcon');
+        
+        if (ui && ui.ui_url) {
+            miningIcon.innerHTML = `<img src="${ui.ui_url}" alt="Mining" style="width:100%;height:100%;object-fit:cover;border-radius:24px;">`;
+        } else {
+            miningIcon.innerHTML = '<i class="fas fa-pickaxe"></i>';
+        }
+    } catch (error) {
+        console.error('Error loading mining UI:', error);
+        document.getElementById('miningIcon').innerHTML = '<i class="fas fa-pickaxe"></i>';
+    }
+}
+
 async function updateUserBalance() {
     if (!currentUser) return;
 
@@ -297,7 +286,6 @@ async function updateUserBalance() {
         currentUser.balance = data.balance;
         currentUser.total_coins = data.total_coins;
 
-        // Update all balance displays
         document.getElementById('userBalance').textContent = formatCurrency(data.balance);
         document.getElementById('userTotalCoins').textContent = formatCurrency(data.total_coins);
         document.getElementById('miningBalance').textContent = formatCurrency(data.balance) + ' MMK';
@@ -306,27 +294,21 @@ async function updateUserBalance() {
     }
 }
 
-// Show Page
 function showPage(pageId) {
-    // Hide all pages
     document.querySelectorAll('.page').forEach(page => {
         page.classList.remove('active');
     });
 
-    // Show selected page
     document.getElementById(pageId).classList.add('active');
 
-    // Update navigation
     document.querySelectorAll('.nav-btn').forEach(btn => {
         btn.classList.remove('active');
     });
     document.querySelector(`[data-page="${pageId}"]`).classList.add('active');
 
-    // Update URL
     const pageName = pageId.replace('Page', '');
     updateURL('/' + pageName);
 
-    // Load page-specific content
     switch(pageId) {
         case 'historyPage':
             loadHistory();
@@ -344,13 +326,11 @@ function showPage(pageId) {
 }
 
 // ======================================
-// MINING SYSTEM
+// FIXED: MINING SYSTEM
 // ======================================
 
-// Load Mining Sessions
-async function loadMiningeSessions() {
+async function loadMiningSessions() {
     try {
-        // Get active sessions
         const { data: sessions } = await supabase
             .from('user_mining_sessions')
             .select('*, plans(*)')
@@ -369,18 +349,17 @@ async function loadMiningeSessions() {
                 }
             });
         } else {
-            // Show start mining button
             document.getElementById('startMiningBtn').style.display = 'inline-flex';
+            document.getElementById('startMiningBtn').disabled = false;
         }
     } catch (error) {
         console.error('Error loading mining sessions:', error);
     }
 }
 
-// Start Free Mining
+// FIXED: Start Free Mining with Duration
 async function startFreeMiningSession() {
     try {
-        // Get free mining settings
         const { data: settings } = await supabase
             .from('free_mining_settings')
             .select('*')
@@ -392,24 +371,30 @@ async function startFreeMiningSession() {
             return;
         }
 
-        // Calculate duration in hours
-        const startTime = new Date();
-        startTime.setHours(parseInt(settings.start_time.split(':')[0]), parseInt(settings.start_time.split(':')[1]), 0);
-        
-        const endTime = new Date();
-        endTime.setHours(parseInt(settings.end_time.split(':')[0]), parseInt(settings.end_time.split(':')[1]), 0);
-        
-        if (endTime < startTime) {
-            endTime.setDate(endTime.getDate() + 1);
+        // Check if user already has active free mining
+        const { data: existingSession } = await supabase
+            .from('user_mining_sessions')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .eq('mining_type', 'free')
+            .eq('is_completed', false)
+            .single();
+
+        if (existingSession) {
+            showToast('You already have an active free mining session', 'warning');
+            return;
         }
 
-        // Create mining session
+        // Calculate end time based on duration
+        const startTime = new Date();
+        const endTime = new Date(startTime.getTime() + (settings.duration_hours * 60 * 60 * 1000));
+
         const { data: session, error } = await supabase
             .from('user_mining_sessions')
             .insert([{
                 user_id: currentUser.id,
                 mining_type: 'free',
-                start_time: new Date().toISOString(),
+                start_time: startTime.toISOString(),
                 end_time: endTime.toISOString(),
                 target_amount: parseFloat(settings.amount),
                 current_amount: 0
@@ -423,6 +408,7 @@ async function startFreeMiningSession() {
         startFreeMining(session);
         showToast('Free mining started!', 'success');
         
+        // Disable start button
         document.getElementById('startMiningBtn').style.display = 'none';
     } catch (error) {
         console.error('Error starting free mining:', error);
@@ -430,7 +416,6 @@ async function startFreeMiningSession() {
     }
 }
 
-// Start Free Mining Display
 function startFreeMining(session) {
     const miningIcon = document.getElementById('miningIcon');
     const miningTypeName = document.getElementById('miningTypeName');
@@ -438,12 +423,16 @@ function startFreeMining(session) {
     const miningAmount = document.getElementById('miningAmount');
     const miningTimer = document.getElementById('miningTimer');
     const miningProgress = document.getElementById('miningProgress');
+    const startBtn = document.getElementById('startMiningBtn');
 
     miningTypeName.textContent = 'Free Mining';
     miningProgress.classList.remove('hidden');
     miningIcon.classList.add('mining-active');
+    
+    // Hide and disable start button
+    startBtn.style.display = 'none';
+    startBtn.disabled = true;
 
-    // Calculate mining rate per second
     const startTime = new Date(session.start_time);
     const endTime = new Date(session.end_time);
     const totalSeconds = (endTime - startTime) / 1000;
@@ -451,36 +440,30 @@ function startFreeMining(session) {
 
     miningRate.textContent = `${formatCurrency(ratePerSecond * 60)} MMK/minute`;
 
-    // Update mining display
     const interval = setInterval(async () => {
         const now = new Date();
         const elapsed = (now - startTime) / 1000;
         const remaining = totalSeconds - elapsed;
 
-        if (remaining <= 0) {
+        if (remaining <= 0 || elapsed >= totalSeconds) {
             clearInterval(interval);
             await completeMiningSession(session.id);
             return;
         }
 
-        // Calculate current amount
         const currentAmount = Math.min(elapsed * ratePerSecond, session.target_amount);
         
-        // Update display
         miningAmount.textContent = formatCurrency(currentAmount) + ' MMK';
         
-        // Update timer
         const hours = Math.floor(remaining / 3600);
         const minutes = Math.floor((remaining % 3600) / 60);
         const seconds = Math.floor(remaining % 60);
         miningTimer.textContent = `${hours}h ${minutes}m ${seconds}s remaining`;
 
-        // Update progress bar
         const progress = (elapsed / totalSeconds) * 100;
         document.querySelector('.progress-fill').style.width = progress + '%';
 
-        // Update session in database every 10 seconds
-        if (elapsed % 10 === 0) {
+        if (Math.floor(elapsed) % 10 === 0) {
             await supabase
                 .from('user_mining_sessions')
                 .update({ current_amount: currentAmount })
@@ -491,23 +474,18 @@ function startFreeMining(session) {
     miningIntervals.push(interval);
 }
 
-// Start Plan Mining Display
 function startPlanMining(session) {
-    // Similar to free mining but shown in secondary area if free mining is active
     const hasFreeMining = activeFreeSession && !activeFreeSession.is_completed;
     
     if (hasFreeMining) {
-        // Show in secondary mining area
         const secondaryMining = document.getElementById('secondaryMining');
         secondaryMining.classList.remove('hidden');
         
-        const secondaryCard = document.getElementById('secondaryMiningCard');
         const secondaryName = document.getElementById('secondaryMiningName');
         const secondaryAmount = document.getElementById('secondaryMiningAmount');
 
         secondaryName.textContent = session.plans?.name || 'Plan Mining';
 
-        // Calculate and update
         const startTime = new Date(session.start_time);
         const endTime = new Date(session.end_time);
         const totalSeconds = (endTime - startTime) / 1000;
@@ -527,7 +505,7 @@ function startPlanMining(session) {
             const currentAmount = Math.min(elapsed * ratePerSecond, session.target_amount);
             secondaryAmount.textContent = formatCurrency(currentAmount) + ' MMK';
 
-            if (elapsed % 10 === 0) {
+            if (Math.floor(elapsed) % 10 === 0) {
                 await supabase
                     .from('user_mining_sessions')
                     .update({ current_amount: currentAmount })
@@ -537,15 +515,13 @@ function startPlanMining(session) {
 
         miningIntervals.push(interval);
 
-        // Make clickable to switch
+        const secondaryCard = document.getElementById('secondaryMiningCard');
         secondaryCard.onclick = () => switchMiningDisplay('plan');
     } else {
-        // Show in main area
         displayPlanMiningMain(session);
     }
 }
 
-// Display Plan Mining in Main Area
 function displayPlanMiningMain(session) {
     const miningIcon = document.getElementById('miningIcon');
     const miningTypeName = document.getElementById('miningTypeName');
@@ -558,9 +534,8 @@ function displayPlanMiningMain(session) {
     miningProgress.classList.remove('hidden');
     miningIcon.classList.add('mining-active');
 
-    // Load plan UI if available
     if (session.plans?.ui_url) {
-        miningIcon.innerHTML = `<img src="${session.plans.ui_url}" alt="Plan">`;
+        miningIcon.innerHTML = `<img src="${session.plans.ui_url}" alt="Plan" style="width:100%;height:100%;object-fit:cover;border-radius:24px;">`;
     }
 
     const startTime = new Date(session.start_time);
@@ -592,7 +567,7 @@ function displayPlanMiningMain(session) {
         const progress = (elapsed / totalSeconds) * 100;
         document.querySelector('.progress-fill').style.width = progress + '%';
 
-        if (elapsed % 10 === 0) {
+        if (Math.floor(elapsed) % 10 === 0) {
             await supabase
                 .from('user_mining_sessions')
                 .update({ current_amount: currentAmount })
@@ -603,9 +578,7 @@ function displayPlanMiningMain(session) {
     miningIntervals.push(interval);
 }
 
-// Switch Mining Display
 function switchMiningDisplay(type) {
-    // Clear current display
     miningIntervals.forEach(interval => clearInterval(interval));
     miningIntervals = [];
 
@@ -613,14 +586,12 @@ function switchMiningDisplay(type) {
         displayPlanMiningMain(activePlanSession);
         
         if (activeFreeSession) {
-            // Show free in secondary
             const secondaryMining = document.getElementById('secondaryMining');
             secondaryMining.classList.remove('hidden');
             
             const secondaryName = document.getElementById('secondaryMiningName');
             secondaryName.textContent = 'Free Mining';
             
-            // Restart free mining in secondary
             startFreeMining(activeFreeSession);
         }
     } else if (type === 'free' && activeFreeSession) {
@@ -632,44 +603,48 @@ function switchMiningDisplay(type) {
     }
 }
 
-// Complete Mining Session
 async function completeMiningSession(sessionId) {
     try {
         const { data: session } = await supabase
             .from('user_mining_sessions')
             .update({ 
                 is_completed: true,
-                current_amount: supabase.rpc('get_session_target', { session_id: sessionId })
+                current_amount: supabase.raw('target_amount')
             })
             .eq('id', sessionId)
             .select()
             .single();
 
-        // Update user balance
         await updateUserBalance();
         
         showToast('Mining completed! ' + formatCurrency(session.target_amount) + ' MMK added to balance', 'success');
 
-        // Reset display
         if (session.mining_type === 'free') {
             activeFreeSession = null;
-            document.getElementById('startMiningBtn').style.display = 'inline-flex';
+            const startBtn = document.getElementById('startMiningBtn');
+            startBtn.style.display = 'inline-flex';
+            startBtn.disabled = false;
+            
+            document.getElementById('miningIcon').classList.remove('mining-active');
+            document.getElementById('miningProgress').classList.add('hidden');
+            document.getElementById('miningTypeName').textContent = 'Start Mining';
+            document.getElementById('miningRate').textContent = 'Click to start';
+            document.getElementById('miningAmount').textContent = '0 MMK';
+            document.getElementById('miningTimer').textContent = '';
         } else {
             activePlanSession = null;
         }
 
-        // Reload sessions
-        await loadMiningeSessions();
+        await loadMiningSessions();
     } catch (error) {
         console.error('Error completing mining:', error);
     }
 }
 
 // ======================================
-// PLANS SYSTEM
+// PLANS SYSTEM (Continued from Part 1)
 // ======================================
 
-// Load Plans
 async function loadPlans() {
     try {
         const { data: plans } = await supabase
@@ -719,7 +694,6 @@ async function loadPlans() {
     }
 }
 
-// Buy Plan
 async function buyPlan(planId) {
     // Check if user already has an active plan
     const { data: activePurchase } = await supabase
@@ -735,14 +709,12 @@ async function buyPlan(planId) {
         return;
     }
 
-    // Get plan details
     const { data: plan } = await supabase
         .from('plans')
         .select('*')
         .eq('id', planId)
         .single();
 
-    // Load payment options
     const { data: payments } = await supabase
         .from('payments')
         .select('*')
@@ -753,13 +725,12 @@ async function buyPlan(planId) {
         return;
     }
 
-    // Show payment modal
     const modal = document.getElementById('planPurchaseModal');
     const content = document.getElementById('planPurchaseContent');
     
     content.innerHTML = `
         <div class="plan-summary" style="background: var(--dark-bg); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
-            <h4>Plan: ${plan.name}</h4>
+            <h4>${plan.name}</h4>
             <p>Price: ${formatCurrency(plan.price)} MMK</p>
         </div>
         
@@ -792,7 +763,6 @@ async function buyPlan(planId) {
 
     modal.classList.add('active');
 
-    // Add payment selection listeners
     document.querySelectorAll('.payment-option').forEach(option => {
         option.onclick = function() {
             document.querySelectorAll('.payment-option').forEach(opt => opt.classList.remove('selected'));
@@ -822,7 +792,6 @@ async function buyPlan(planId) {
     });
 }
 
-// Submit Plan Purchase
 window.submitPlanPurchase = async function(planId) {
     const selectedPayment = document.querySelector('.payment-option.selected');
     if (!selectedPayment) {
@@ -854,7 +823,6 @@ window.submitPlanPurchase = async function(planId) {
         showToast('Purchase request submitted! Please wait for approval.', 'success');
         document.getElementById('planPurchaseModal').classList.remove('active');
         
-        // Reload plans
         await loadPlans();
     } catch (error) {
         console.error('Error submitting purchase:', error);
@@ -987,7 +955,7 @@ async function loadContacts() {
         .from('contacts')
         .select('*')
         .eq('is_active', true)
-        .order('created_at', { ascending: true });
+        .order('display_order', { ascending: true });
 
     const container = document.getElementById('contactsContainer');
     
@@ -1006,7 +974,7 @@ async function loadContacts() {
 }
 
 // ======================================
-// NEWS PAGE
+// NEWS PAGE WITH MODAL VIEW
 // ======================================
 
 async function loadNews() {
@@ -1022,18 +990,47 @@ async function loadNews() {
         return;
     }
 
-    for (const item of news) {
-        // Get contacts
-        let contactsHTML = '';
-        if (item.contact_ids && item.contact_ids.length > 0) {
-            const { data: contacts } = await supabase
-                .from('contacts')
-                .select('*')
-                .in('id', item.contact_ids);
-            
-            if (contacts && contacts.length > 0) {
-                contactsHTML = `
-                    <div class="news-contacts">
+    container.innerHTML = news.map(item => {
+        const firstImage = item.news_media?.find(m => m.media_type === 'image');
+        
+        return `
+            <div class="news-card" onclick="showNewsDetail('${item.id}')">
+                ${firstImage ? `<img src="${firstImage.media_url}" alt="News" class="news-preview-image">` : ''}
+                <div class="news-preview-content">
+                    <h3>${item.title}</h3>
+                    <p>${item.content.substring(0, 120)}...</p>
+                    <div class="news-meta">
+                        <span><i class="fas fa-calendar"></i> ${formatDate(item.created_at)}</span>
+                        ${item.news_media && item.news_media.length > 0 ? `<span><i class="fas fa-images"></i> ${item.news_media.length} media</span>` : ''}
+                    </div>
+                    <button class="btn-read-more">Read More <i class="fas fa-arrow-right"></i></button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+window.showNewsDetail = async function(newsId) {
+    const { data: item } = await supabase
+        .from('news')
+        .select('*, news_media(*)')
+        .eq('id', newsId)
+        .single();
+
+    if (!item) return;
+
+    let contactsHTML = '';
+    if (item.contact_ids && item.contact_ids.length > 0) {
+        const { data: contacts } = await supabase
+            .from('contacts')
+            .select('*')
+            .in('id', item.contact_ids);
+        
+        if (contacts && contacts.length > 0) {
+            contactsHTML = `
+                <div class="news-contacts">
+                    <h4>Contact Us:</h4>
+                    <div class="news-contact-buttons">
                         ${contacts.map(contact => `
                             <a href="${contact.link}" target="_blank" class="news-contact-btn">
                                 ${contact.icon_url ? `<img src="${contact.icon_url}" class="news-contact-icon">` : ''}
@@ -1041,60 +1038,63 @@ async function loadNews() {
                             </a>
                         `).join('')}
                     </div>
-                `;
-            }
+                </div>
+            `;
         }
+    }
 
-        // Get media
-        let mediaHTML = '';
-        if (item.news_media && item.news_media.length > 0) {
-            const images = item.news_media.filter(m => m.media_type === 'image');
-            const videos = item.news_media.filter(m => m.media_type === 'video');
-            
-            if (images.length === 1) {
-                mediaHTML = `<img src="${images[0].media_url}" alt="News" class="news-media">`;
-            } else if (images.length > 1) {
-                mediaHTML = `
-                    <div class="news-media-grid">
-                        ${images.map(img => `<img src="${img.media_url}" alt="News" onclick="window.open('${img.media_url}', '_blank')">`).join('')}
+    let mediaHTML = '';
+    if (item.news_media && item.news_media.length > 0) {
+        const images = item.news_media.filter(m => m.media_type === 'image');
+        const videos = item.news_media.filter(m => m.media_type === 'video');
+        
+        if (images.length > 0) {
+            mediaHTML += `
+                <div class="news-images-grid">
+                    ${images.map(img => `<img src="${img.media_url}" alt="News" onclick="window.open('${img.media_url}', '_blank')">`).join('')}
+                </div>
+            `;
+        }
+        
+        if (videos.length > 0) {
+            mediaHTML += videos.map(vid => `<video src="${vid.media_url}" controls class="news-video"></video>`).join('');
+        }
+    }
+
+    if (item.youtube_url) {
+        let videoId = '';
+        if (item.youtube_url.includes('youtube.com/watch?v=')) {
+            videoId = item.youtube_url.split('v=')[1].split('&')[0];
+        } else if (item.youtube_url.includes('youtu.be/')) {
+            videoId = item.youtube_url.split('youtu.be/')[1].split('?')[0];
+        } else if (item.youtube_url.includes('youtube.com/shorts/')) {
+            videoId = item.youtube_url.split('shorts/')[1].split('?')[0];
+        }
+        
+        if (videoId) {
+            mediaHTML += `<iframe src="https://www.youtube.com/embed/${videoId}" class="news-youtube" allowfullscreen></iframe>`;
+        }
+    }
+
+    const modalHTML = `
+        <div class="modal active" id="newsDetailModal">
+            <div class="modal-content large">
+                <span class="close" onclick="document.getElementById('newsDetailModal').remove()">&times;</span>
+                <div class="news-detail-content">
+                    <h2>${item.title}</h2>
+                    ${mediaHTML}
+                    <div class="news-full-content">
+                        <p>${item.content}</p>
                     </div>
-                `;
-            }
-            
-            if (videos.length > 0) {
-                mediaHTML += `<video src="${videos[0].media_url}" controls class="news-video"></video>`;
-            }
-        }
-
-        // YouTube video
-        if (item.youtube_url) {
-            let videoId = '';
-            if (item.youtube_url.includes('youtube.com/watch?v=')) {
-                videoId = item.youtube_url.split('v=')[1].split('&')[0];
-            } else if (item.youtube_url.includes('youtu.be/')) {
-                videoId = item.youtube_url.split('youtu.be/')[1].split('?')[0];
-            } else if (item.youtube_url.includes('youtube.com/shorts/')) {
-                videoId = item.youtube_url.split('shorts/')[1].split('?')[0];
-            }
-            
-            if (videoId) {
-                mediaHTML += `<iframe src="https://www.youtube.com/embed/${videoId}" class="news-youtube" allowfullscreen></iframe>`;
-            }
-        }
-
-        container.innerHTML += `
-            <div class="news-card">
-                ${mediaHTML}
-                <div class="news-content">
-                    <h3>${item.title}</h3>
-                    <p>${item.content}</p>
                     ${contactsHTML}
-                    <p class="news-date">${formatDate(item.created_at)}</p>
+                    <p class="news-date"><i class="fas fa-calendar"></i> ${formatDate(item.created_at)}</p>
                 </div>
             </div>
-        `;
-    }
-}
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+};
 
 // ======================================
 // PROFILE PAGE
@@ -1147,7 +1147,6 @@ async function loadWithdrawalHistory() {
     `).join('');
 }
 
-// Update Profile
 document.getElementById('updateProfileBtn')?.addEventListener('click', async () => {
     const newPassword = document.getElementById('profileNewPassword').value;
     const newPin = document.getElementById('profileNewPin').value;
@@ -1171,7 +1170,6 @@ document.getElementById('updateProfileBtn')?.addEventListener('click', async () 
 
         showToast('Profile updated successfully', 'success');
         
-        // Clear inputs
         document.getElementById('profileNewPassword').value = '';
         document.getElementById('profileNewPin').value = '';
     } catch (error) {
@@ -1180,7 +1178,6 @@ document.getElementById('updateProfileBtn')?.addEventListener('click', async () 
     }
 });
 
-// Withdrawal Request
 document.getElementById('withdrawBtn')?.addEventListener('click', () => {
     const modal = document.getElementById('withdrawalModal');
     document.getElementById('withdrawAvailableBalance').textContent = formatCurrency(currentUser.balance) + ' MMK';
@@ -1196,13 +1193,11 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
     const paymentAddress = document.getElementById('withdrawPaymentAddress').value;
     const pin = document.getElementById('withdrawPin').value;
 
-    // Verify PIN
     if (pin !== currentUser.withdraw_pin) {
         showToast('Invalid withdrawal PIN', 'error');
         return;
     }
 
-    // Check limits
     const { data: checkResult } = await supabase
         .rpc('check_withdrawal_limits', {
             p_user_id: currentUser.id,
@@ -1218,7 +1213,6 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
     }
 
     try {
-        // Deduct from balance temporarily
         const { error: balanceError } = await supabase
             .from('users')
             .update({ balance: currentUser.balance - amount })
@@ -1226,7 +1220,6 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
 
         if (balanceError) throw balanceError;
 
-        // Create withdrawal request
         const { error } = await supabase
             .from('withdrawal_requests')
             .insert([{
@@ -1250,7 +1243,6 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
         console.error('Error submitting withdrawal:', error);
         showToast('Failed to submit withdrawal request', 'error');
         
-        // Restore balance if failed
         await supabase
             .from('users')
             .update({ balance: currentUser.balance })
@@ -1262,7 +1254,6 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
 // EVENT LISTENERS
 // ======================================
 
-// Auth Form Switching
 document.getElementById('showLogin')?.addEventListener('click', (e) => {
     e.preventDefault();
     document.getElementById('registerForm').classList.add('hidden');
@@ -1277,7 +1268,6 @@ document.getElementById('showRegister')?.addEventListener('click', (e) => {
     updateURL('/register');
 });
 
-// Register Form
 document.getElementById('registerFormElement')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('regUsername').value;
@@ -1287,7 +1277,6 @@ document.getElementById('registerFormElement')?.addEventListener('submit', async
     await registerUser(username, password, pin);
 });
 
-// Login Form
 document.getElementById('loginFormElement')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('loginUsername').value;
@@ -1296,7 +1285,6 @@ document.getElementById('loginFormElement')?.addEventListener('submit', async (e
     await loginUser(username, password);
 });
 
-// Navigation
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const pageId = btn.dataset.page;
@@ -1304,7 +1292,6 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     });
 });
 
-// History Tabs
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const tabId = btn.dataset.tab;
@@ -1317,17 +1304,14 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
-// Start Mining Button
 document.getElementById('startMiningBtn')?.addEventListener('click', startFreeMiningSession);
 
-// Modal Close Buttons
 document.querySelectorAll('.modal .close').forEach(closeBtn => {
     closeBtn.addEventListener('click', () => {
         closeBtn.closest('.modal').classList.remove('active');
     });
 });
 
-// Close modal on outside click
 document.querySelectorAll('.modal').forEach(modal => {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -1342,36 +1326,28 @@ document.querySelectorAll('.modal').forEach(modal => {
 
 async function init() {
     try {
-        // Get user IP
         userIP = await getUserIP();
-        
-        // Check if IP is banned
         await checkIPBan(userIP);
         
-        // Check auto login
         const autoLoggedIn = await checkAutoLogin();
         
         if (!autoLoggedIn) {
-            // Show auth container
             document.getElementById('authContainer').classList.remove('hidden');
             updateURL('/register');
         }
         
-        // Hide loading screen
         document.getElementById('loadingScreen').style.display = 'none';
     } catch (error) {
         console.error('Initialization error:', error);
     }
 }
 
-// Start app when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
 
-// Handle browser back/forward
 window.addEventListener('popstate', () => {
     // Handle URL changes if needed
 });
