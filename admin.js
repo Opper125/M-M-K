@@ -1,14 +1,13 @@
 /* ======================================
    MY MMK - Admin Dashboard JavaScript
+   COMPLETE FIXED VERSION
    ====================================== */
 
-// Supabase Configuration
 const SUPABASE_URL = 'https://qmeeqwdnjlmhjuexldsu.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtZWVxd2RuamxtaGp1ZXhsZHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4Mzg3MDYsImV4cCI6MjA3NTQxNDcwNn0.tyL8-OQByO7MALrBJCZ6rNZ0oR10DWSJ3776nHBgn7Q';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Global State
 let adminIP = null;
 let adminAuthorized = false;
 let currentEditId = null;
@@ -64,29 +63,40 @@ async function getBrowserInfo() {
     };
 }
 
-// File Upload to Supabase Storage
+// FIXED: File Upload Function
 async function uploadFile(file, bucket) {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-    const filePath = `${fileName}`;
+    try {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+        const filePath = fileName;
 
-    const { data, error } = await supabase.storage
-        .from(bucket)
-        .upload(filePath, file);
+        const { data, error } = await supabase.storage
+            .from(bucket)
+            .upload(filePath, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
 
-    if (error) throw error;
+        if (error) {
+            console.error('Upload error:', error);
+            throw error;
+        }
 
-    const { data: urlData } = supabase.storage
-        .from(bucket)
-        .getPublicUrl(filePath);
+        const { data: urlData } = supabase.storage
+            .from(bucket)
+            .getPublicUrl(filePath);
 
-    return urlData.publicUrl;
+        return urlData.publicUrl;
+    } catch (error) {
+        console.error('File upload error:', error);
+        throw error;
+    }
 }
 
-// Delete File from Supabase Storage
 async function deleteFile(url, bucket) {
     try {
-        const fileName = url.split('/').pop();
+        const urlParts = url.split('/');
+        const fileName = urlParts[urlParts.length - 1];
         await supabase.storage.from(bucket).remove([fileName]);
     } catch (error) {
         console.error('Error deleting file:', error);
@@ -100,16 +110,16 @@ async function deleteFile(url, bucket) {
 async function checkAdminAuth() {
     adminIP = await getUserIP();
     
-    // Check if this IP is banned
     const { data: banned } = await supabase
         .from('banned_ips')
         .select('*')
         .eq('ip_address', adminIP)
+        .eq('is_active', true)
         .single();
     
     if (banned) {
         document.body.innerHTML = `
-            <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#0f172a;color:#f1f5f9;text-align:center;padding:20px;">
+            <div style="display:flex;justify-content:center;align-items:center;height:100vh;background:#0a0f1e;color:#f1f5f9;text-align:center;padding:20px;">
                 <div>
                     <i class="fas fa-ban" style="font-size:72px;color:#ef4444;margin-bottom:20px;"></i>
                     <h1 style="font-size:32px;margin-bottom:16px;">Access Permanently Denied</h1>
@@ -120,7 +130,6 @@ async function checkAdminAuth() {
         return;
     }
 
-    // Check if IP is authorized and logged in
     const savedAuth = localStorage.getItem('admin_authorized');
     if (savedAuth) {
         const { data: auth } = await supabase
@@ -137,18 +146,15 @@ async function checkAdminAuth() {
         }
     }
 
-    // Show login form
     document.getElementById('adminLogin').classList.remove('hidden');
 }
 
-// Admin Login
 document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const password = document.getElementById('adminPassword').value;
     
     try {
-        // Check if password exists and matches authorized IP
         const { data: auth, error } = await supabase
             .from('admin_auth')
             .select('*')
@@ -161,16 +167,13 @@ document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) 
             return;
         }
 
-        // Check if IP matches
         if (auth.authorized_ip === adminIP) {
-            // Direct login
             adminAuthorized = true;
             localStorage.setItem('admin_authorized', 'true');
             showToast('Login successful!', 'success');
             document.getElementById('adminLogin').classList.add('hidden');
             showDashboard();
         } else {
-            // Request approval from authorized device
             const browserInfo = await getBrowserInfo();
             
             const { error: reqError } = await supabase
@@ -187,7 +190,6 @@ document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) 
             showToast('Login request sent. Waiting for approval...', 'warning');
             document.getElementById('loginRequestInfo').classList.remove('hidden');
             
-            // Start polling for approval
             startLoginRequestPolling();
         }
     } catch (error) {
@@ -196,7 +198,6 @@ document.getElementById('adminLoginForm')?.addEventListener('submit', async (e) 
     }
 });
 
-// Poll for login request approval
 function startLoginRequestPolling() {
     loginRequestInterval = setInterval(async () => {
         const { data } = await supabase
@@ -217,7 +218,6 @@ function startLoginRequestPolling() {
             showDashboard();
         }
 
-        // Check if rejected
         const { data: rejected } = await supabase
             .from('admin_login_requests')
             .select('*')
@@ -230,7 +230,6 @@ function startLoginRequestPolling() {
         if (rejected) {
             clearInterval(loginRequestInterval);
             
-            // Ban this IP
             await supabase
                 .from('banned_ips')
                 .insert([{
@@ -244,7 +243,7 @@ function startLoginRequestPolling() {
                 location.reload();
             }, 2000);
         }
-    }, 3000); // Check every 3 seconds
+    }, 3000);
 }
 
 // ======================================
@@ -260,21 +259,17 @@ function showDashboard() {
 }
 
 function showSection(sectionId) {
-    // Hide all sections
     document.querySelectorAll('.content-section').forEach(section => {
         section.classList.remove('active');
     });
 
-    // Show selected section
     document.getElementById(sectionId + 'Section').classList.add('active');
 
-    // Update navigation
     document.querySelectorAll('.nav-link').forEach(link => {
         link.classList.remove('active');
     });
     document.querySelector(`[data-section="${sectionId}"]`).classList.add('active');
 
-    // Load section data
     switch(sectionId) {
         case 'dashboard':
             loadDashboardStats();
@@ -315,7 +310,6 @@ function showSection(sectionId) {
     }
 }
 
-// Navigation
 document.querySelectorAll('.nav-link').forEach(link => {
     link.addEventListener('click', (e) => {
         e.preventDefault();
@@ -330,13 +324,11 @@ document.querySelectorAll('.nav-link').forEach(link => {
 
 async function loadDashboardStats() {
     try {
-        // Total Users
         const { count: usersCount } = await supabase
             .from('users')
             .select('*', { count: 'exact', head: true });
         document.getElementById('totalUsers').textContent = formatCurrency(usersCount || 0);
 
-        // Active Plans
         const { count: plansCount } = await supabase
             .from('user_mining_sessions')
             .select('*', { count: 'exact', head: true })
@@ -344,14 +336,12 @@ async function loadDashboardStats() {
             .eq('is_completed', false);
         document.getElementById('activePlans').textContent = formatCurrency(plansCount || 0);
 
-        // Total Mined
         const { data: totalMined } = await supabase
             .from('users')
             .select('total_coins');
         const total = totalMined?.reduce((sum, user) => sum + parseFloat(user.total_coins || 0), 0) || 0;
         document.getElementById('totalMined').textContent = formatCurrency(total);
 
-        // Total Revenue
         const { data: purchases } = await supabase
             .from('user_plan_purchases')
             .select('plans(price)')
@@ -359,10 +349,7 @@ async function loadDashboardStats() {
         const revenue = purchases?.reduce((sum, p) => sum + parseFloat(p.plans?.price || 0), 0) || 0;
         document.getElementById('totalRevenue').textContent = formatCurrency(revenue);
 
-        // Recent Activities
         loadRecentActivities();
-
-        // Pending Actions
         loadPendingActions();
     } catch (error) {
         console.error('Error loading stats:', error);
@@ -385,8 +372,8 @@ async function loadRecentActivities() {
 
     container.innerHTML = activities.map(activity => `
         <div class="activity-item">
-            <strong>${activity.users?.username}</strong> purchased 
-            <strong>${activity.plans?.name}</strong> - 
+            <strong>${activity.users?.username || 'User'}</strong> purchased 
+            <strong>${activity.plans?.name || 'Plan'}</strong> - 
             <span class="status-badge ${activity.status}">${activity.status}</span>
             <br>
             <small>${formatDate(activity.purchased_at)}</small>
@@ -397,7 +384,6 @@ async function loadRecentActivities() {
 async function loadPendingActions() {
     const container = document.getElementById('pendingActions');
     
-    // Count pending items
     const { count: purchasesCount } = await supabase
         .from('user_plan_purchases')
         .select('*', { count: 'exact', head: true })
@@ -413,7 +399,6 @@ async function loadPendingActions() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'pending');
 
-    // Update badges
     document.getElementById('purchasesBadge').textContent = purchasesCount || 0;
     document.getElementById('withdrawalsBadge').textContent = withdrawalsCount || 0;
     document.getElementById('requestsBadge').textContent = loginRequestsCount || 0;
@@ -435,7 +420,7 @@ async function loadPendingActions() {
 }
 
 // ======================================
-// LOGIN REQUESTS MANAGEMENT
+// LOGIN REQUESTS
 // ======================================
 
 async function loadLoginRequests() {
@@ -491,13 +476,11 @@ window.rejectLoginRequest = async function(id, ip) {
     if (!confirm('Are you sure you want to reject this request? This will ban the IP address.')) return;
 
     try {
-        // Update request status
         await supabase
             .from('admin_login_requests')
             .update({ status: 'rejected' })
             .eq('id', id);
 
-        // Ban IP
         await supabase
             .from('banned_ips')
             .insert([{
@@ -528,13 +511,12 @@ async function loadSiteSettings() {
         
         if (settings.logo_url) {
             document.getElementById('logoPreview').innerHTML = `
-                <img src="${settings.logo_url}" alt="Logo">
+                <img src="${settings.logo_url}" alt="Logo" style="max-width:200px;max-height:200px;object-fit:contain;">
             `;
         }
     }
 }
 
-// Logo Upload
 document.getElementById('logoUpload')?.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -544,14 +526,12 @@ document.getElementById('logoUpload')?.addEventListener('change', async (e) => {
         
         const url = await uploadFile(file, 'logos');
         
-        // Update database
         const { data: settings } = await supabase
             .from('site_settings')
             .select('*')
             .single();
 
         if (settings) {
-            // Delete old logo if exists
             if (settings.logo_url) {
                 await deleteFile(settings.logo_url, 'logos');
             }
@@ -570,11 +550,10 @@ document.getElementById('logoUpload')?.addEventListener('change', async (e) => {
         loadSiteSettings();
     } catch (error) {
         console.error('Error uploading logo:', error);
-        showToast('Failed to upload logo', 'error');
+        showToast('Failed to upload logo: ' + error.message, 'error');
     }
 });
 
-// Update Site Name
 window.updateSiteName = async function() {
     const siteName = document.getElementById('siteName').value;
     
@@ -601,7 +580,6 @@ window.updateSiteName = async function() {
     }
 };
 
-// Create Admin Auth
 window.createAdminAuth = async function() {
     const password = document.getElementById('newAdminPassword').value;
     const authorizedIP = document.getElementById('authorizedIP').value;
@@ -637,11 +615,13 @@ async function loadMiningUI() {
         .from('mining_ui')
         .select('*')
         .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .single();
 
     if (ui && ui.ui_url) {
         document.getElementById('miningUIPreview').innerHTML = `
-            <img src="${ui.ui_url}" alt="Mining UI">
+            <img src="${ui.ui_url}" alt="Mining UI" style="max-width:300px;max-height:300px;object-fit:contain;">
         `;
     }
 }
@@ -655,13 +635,11 @@ document.getElementById('miningUIUpload')?.addEventListener('change', async (e) 
         
         const url = await uploadFile(file, 'mining-ui');
         
-        // Deactivate old UI
         await supabase
             .from('mining_ui')
             .update({ is_active: false })
             .eq('is_active', true);
 
-        // Insert new UI
         await supabase
             .from('mining_ui')
             .insert([{
@@ -673,12 +651,12 @@ document.getElementById('miningUIUpload')?.addEventListener('change', async (e) 
         loadMiningUI();
     } catch (error) {
         console.error('Error uploading mining UI:', error);
-        showToast('Failed to upload mining UI', 'error');
+        showToast('Failed to upload mining UI: ' + error.message, 'error');
     }
 });
 
 // ======================================
-// FREE MINING SETTINGS
+// FIXED: FREE MINING SETTINGS
 // ======================================
 
 async function loadFreeMiningSettings() {
@@ -705,7 +683,7 @@ async function loadFreeMiningSettings() {
                 </div>
             </div>
             <div class="list-card-body">
-                <p><strong>Time:</strong> ${setting.start_time} - ${setting.end_time}</p>
+                <p><strong>Duration:</strong> ${setting.duration_hours} hours</p>
                 <p><strong>Amount:</strong> ${formatCurrency(setting.amount)} MMK</p>
                 <p><strong>Status:</strong> <span class="status-badge ${setting.is_active ? 'approved' : 'rejected'}">${setting.is_active ? 'Active' : 'Inactive'}</span></p>
             </div>
@@ -721,23 +699,19 @@ window.showAddFreeMining = function() {
 document.getElementById('freeMiningForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const startTime = document.getElementById('freeStartTime').value;
-    const endTime = document.getElementById('freeEndTime').value;
+    const durationHours = parseInt(document.getElementById('freeDurationHours').value);
     const amount = parseFloat(document.getElementById('freeAmount').value);
 
     try {
-        // Deactivate all existing settings
         await supabase
             .from('free_mining_settings')
             .update({ is_active: false })
             .eq('is_active', true);
 
-        // Insert new setting
         await supabase
             .from('free_mining_settings')
             .insert([{
-                start_time: startTime,
-                end_time: endTime,
+                duration_hours: durationHours,
                 amount: amount,
                 is_active: true
             }]);
@@ -746,7 +720,8 @@ document.getElementById('freeMiningForm')?.addEventListener('submit', async (e) 
         document.getElementById('freeMiningModal').classList.remove('active');
         loadFreeMiningSettings();
     } catch (error) {
-        showToast('Failed to add setting', 'error');
+        console.error('Error adding free mining:', error);
+        showToast('Failed to add setting: ' + error.message, 'error');
     }
 });
 
@@ -832,7 +807,7 @@ window.editPlan = async function(id) {
         document.getElementById('planPrice').value = plan.price;
         
         if (plan.ui_url) {
-            document.getElementById('planImagePreview').innerHTML = `<img src="${plan.ui_url}" style="max-width:100%;max-height:200px;">`;
+            document.getElementById('planImagePreview').innerHTML = `<img src="${plan.ui_url}" style="max-width:100%;max-height:200px;object-fit:contain;">`;
         }
         
         document.getElementById('planModalTitle').textContent = 'Edit Plan';
@@ -871,7 +846,6 @@ document.getElementById('planForm')?.addEventListener('submit', async (e) => {
         }
 
         if (id) {
-            // Update existing plan
             const { data: oldPlan } = await supabase
                 .from('plans')
                 .select('ui_url')
@@ -889,7 +863,6 @@ document.getElementById('planForm')?.addEventListener('submit', async (e) => {
 
             showToast('Plan updated!', 'success');
         } else {
-            // Create new plan
             await supabase
                 .from('plans')
                 .insert([planData]);
@@ -901,7 +874,7 @@ document.getElementById('planForm')?.addEventListener('submit', async (e) => {
         loadPlans();
     } catch (error) {
         console.error('Error saving plan:', error);
-        showToast('Failed to save plan', 'error');
+        showToast('Failed to save plan: ' + error.message, 'error');
     }
 });
 
@@ -926,43 +899,53 @@ window.deletePlan = async function(id, uiUrl) {
 };
 
 // ======================================
-// PAYMENTS MANAGEMENT
+// FIXED: PAYMENTS MANAGEMENT
 // ======================================
 
 async function loadPayments() {
-    const { data: payments } = await supabase
-        .from('payments')
-        .select('*')
-        .order('created_at', { ascending: true });
+    try {
+        const { data: payments, error } = await supabase
+            .from('payments')
+            .select('*')
+            .order('created_at', { ascending: true });
 
-    const container = document.getElementById('paymentsList');
-    
-    if (!payments || payments.length === 0) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-credit-card"></i><p>No payment methods</p></div>';
-        return;
-    }
+        if (error) {
+            console.error('Error loading payments:', error);
+            throw error;
+        }
 
-    container.innerHTML = payments.map(payment => `
-        <div class="list-card">
-            ${payment.icon_url ? `<img src="${payment.icon_url}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;margin-bottom:12px;">` : ''}
-            <div class="list-card-header">
-                <h3>${payment.name}</h3>
-                <div class="list-card-actions">
-                    <button class="btn-secondary btn-icon" onclick="editPayment('${payment.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn-danger btn-icon" onclick="deletePayment('${payment.id}', '${payment.icon_url || ''}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
+        const container = document.getElementById('paymentsList');
+        
+        if (!payments || payments.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-credit-card"></i><p>No payment methods</p></div>';
+            return;
+        }
+
+        container.innerHTML = payments.map(payment => `
+            <div class="list-card">
+                ${payment.icon_url ? `<img src="${payment.icon_url}" style="width:80px;height:80px;object-fit:cover;border-radius:12px;margin-bottom:12px;">` : ''}
+                <div class="list-card-header">
+                    <h3>${payment.name}</h3>
+                    <div class="list-card-actions">
+                        <button class="btn-secondary btn-icon" onclick="editPayment('${payment.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-danger btn-icon" onclick="deletePayment('${payment.id}', '${payment.icon_url || ''}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="list-card-body">
+                    <p><strong>Address:</strong> ${payment.address}</p>
+                    <p><strong>Instructions:</strong> ${payment.instructions || 'N/A'}</p>
+                    <p><strong>Status:</strong> <span class="status-badge ${payment.is_active ? 'approved' : 'rejected'}">${payment.is_active ? 'Active' : 'Inactive'}</span></p>
                 </div>
             </div>
-            <div class="list-card-body">
-                <p><strong>Address:</strong> ${payment.address}</p>
-                <p><strong>Instructions:</strong> ${payment.instructions || 'N/A'}</p>
-                <p><strong>Status:</strong> <span class="status-badge ${payment.is_active ? 'approved' : 'rejected'}">${payment.is_active ? 'Active' : 'Inactive'}</span></p>
-            </div>
-        </div>
-    `).join('');
+        `).join('');
+    } catch (error) {
+        console.error('Error in loadPayments:', error);
+        showToast('Failed to load payments', 'error');
+    }
 }
 
 window.showAddPayment = function() {
@@ -975,25 +958,32 @@ window.showAddPayment = function() {
 };
 
 window.editPayment = async function(id) {
-    currentEditId = id;
-    const { data: payment } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('id', id)
-        .single();
+    try {
+        currentEditId = id;
+        const { data: payment, error } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-    if (payment) {
-        document.getElementById('paymentId').value = payment.id;
-        document.getElementById('paymentName').value = payment.name;
-        document.getElementById('paymentAddress').value = payment.address;
-        document.getElementById('paymentInstructions').value = payment.instructions || '';
-        
-        if (payment.icon_url) {
-            document.getElementById('paymentIconPreview').innerHTML = `<img src="${payment.icon_url}" style="max-width:100px;">`;
+        if (error) throw error;
+
+        if (payment) {
+            document.getElementById('paymentId').value = payment.id;
+            document.getElementById('paymentName').value = payment.name;
+            document.getElementById('paymentAddress').value = payment.address;
+            document.getElementById('paymentInstructions').value = payment.instructions || '';
+            
+            if (payment.icon_url) {
+                document.getElementById('paymentIconPreview').innerHTML = `<img src="${payment.icon_url}" style="max-width:100px;object-fit:contain;">`;
+            }
+            
+            document.getElementById('paymentModalTitle').textContent = 'Edit Payment';
+            document.getElementById('paymentModal').classList.add('active');
         }
-        
-        document.getElementById('paymentModalTitle').textContent = 'Edit Payment';
-        document.getElementById('paymentModal').classList.add('active');
+    } catch (error) {
+        console.error('Error editing payment:', error);
+        showToast('Failed to load payment data', 'error');
     }
 };
 
@@ -1017,7 +1007,7 @@ document.getElementById('paymentForm')?.addEventListener('submit', async (e) => 
         const paymentData = {
             name,
             address,
-            instructions,
+            instructions: instructions || null,
             is_active: true
         };
 
@@ -1036,16 +1026,20 @@ document.getElementById('paymentForm')?.addEventListener('submit', async (e) => 
                 await deleteFile(oldPayment.icon_url, 'payment-icons');
             }
 
-            await supabase
+            const { error } = await supabase
                 .from('payments')
                 .update(paymentData)
                 .eq('id', id);
 
+            if (error) throw error;
+
             showToast('Payment updated!', 'success');
         } else {
-            await supabase
+            const { error } = await supabase
                 .from('payments')
                 .insert([paymentData]);
+
+            if (error) throw error;
 
             showToast('Payment created!', 'success');
         }
@@ -1054,7 +1048,7 @@ document.getElementById('paymentForm')?.addEventListener('submit', async (e) => 
         loadPayments();
     } catch (error) {
         console.error('Error saving payment:', error);
-        showToast('Failed to save payment', 'error');
+        showToast('Failed to save payment: ' + error.message, 'error');
     }
 });
 
@@ -1066,56 +1060,69 @@ window.deletePayment = async function(id, iconUrl) {
             await deleteFile(iconUrl, 'payment-icons');
         }
 
-        await supabase
+        const { error } = await supabase
             .from('payments')
             .delete()
             .eq('id', id);
 
+        if (error) throw error;
+
         showToast('Payment deleted', 'success');
         loadPayments();
     } catch (error) {
+        console.error('Error deleting payment:', error);
         showToast('Failed to delete payment', 'error');
     }
 };
 
 // ======================================
-// CONTACTS MANAGEMENT
+// FIXED: CONTACTS MANAGEMENT
 // ======================================
 
 async function loadContacts() {
-    const { data: contacts } = await supabase
-        .from('contacts')
-        .select('*')
-        .order('created_at', { ascending: true });
+    try {
+        const { data: contacts, error } = await supabase
+            .from('contacts')
+            .select('*')
+            .order('display_order', { ascending: true });
 
-    allContacts = contacts || [];
-    const container = document.getElementById('contactsList');
-    
-    if (!contacts || contacts.length === 0) {
-        container.innerHTML = '<div class="empty-state"><i class="fas fa-address-book"></i><p>No contacts</p></div>';
-        return;
-    }
+        if (error) {
+            console.error('Error loading contacts:', error);
+            throw error;
+        }
 
-    container.innerHTML = contacts.map(contact => `
-        <div class="list-card">
-            ${contact.icon_url ? `<img src="${contact.icon_url}" style="width:60px;height:60px;object-fit:cover;border-radius:12px;margin-bottom:12px;">` : ''}
-            <div class="list-card-header">
-                <h3>${contact.name}</h3>
-                <div class="list-card-actions">
-                    <button class="btn-secondary btn-icon" onclick="editContact('${contact.id}')">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="btn-danger btn-icon" onclick="deleteContact('${contact.id}', '${contact.icon_url || ''}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
+        allContacts = contacts || [];
+        const container = document.getElementById('contactsList');
+        
+        if (!contacts || contacts.length === 0) {
+            container.innerHTML = '<div class="empty-state"><i class="fas fa-address-book"></i><p>No contacts</p></div>';
+            return;
+        }
+
+        container.innerHTML = contacts.map(contact => `
+            <div class="list-card">
+                ${contact.icon_url ? `<img src="${contact.icon_url}" style="width:60px;height:60px;object-fit:cover;border-radius:12px;margin-bottom:12px;">` : ''}
+                <div class="list-card-header">
+                    <h3>${contact.name}</h3>
+                    <div class="list-card-actions">
+                        <button class="btn-secondary btn-icon" onclick="editContact('${contact.id}')">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn-danger btn-icon" onclick="deleteContact('${contact.id}', '${contact.icon_url || ''}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="list-card-body">
+                    <p><strong>Link:</strong> <a href="${contact.link}" target="_blank">${contact.link.substring(0, 50)}...</a></p>
+                    <p><strong>Description:</strong> ${contact.description || 'N/A'}</p>
                 </div>
             </div>
-            <div class="list-card-body">
-                <p><strong>Link:</strong> <a href="${contact.link}" target="_blank">${contact.link.substring(0, 50)}...</a></p>
-                <p><strong>Description:</strong> ${contact.description || 'N/A'}</p>
-            </div>
-        </div>
-    `).join('');
+        `).join('');
+    } catch (error) {
+        console.error('Error in loadContacts:', error);
+        showToast('Failed to load contacts', 'error');
+    }
 }
 
 window.showAddContact = function() {
@@ -1128,25 +1135,32 @@ window.showAddContact = function() {
 };
 
 window.editContact = async function(id) {
-    currentEditId = id;
-    const { data: contact } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('id', id)
-        .single();
+    try {
+        currentEditId = id;
+        const { data: contact, error } = await supabase
+            .from('contacts')
+            .select('*')
+            .eq('id', id)
+            .single();
 
-    if (contact) {
-        document.getElementById('contactId').value = contact.id;
-        document.getElementById('contactName').value = contact.name;
-        document.getElementById('contactLink').value = contact.link;
-        document.getElementById('contactDescription').value = contact.description || '';
-        
-        if (contact.icon_url) {
-            document.getElementById('contactIconPreview').innerHTML = `<img src="${contact.icon_url}" style="max-width:100px;">`;
+        if (error) throw error;
+
+        if (contact) {
+            document.getElementById('contactId').value = contact.id;
+            document.getElementById('contactName').value = contact.name;
+            document.getElementById('contactLink').value = contact.link;
+            document.getElementById('contactDescription').value = contact.description || '';
+            
+            if (contact.icon_url) {
+                document.getElementById('contactIconPreview').innerHTML = `<img src="${contact.icon_url}" style="max-width:100px;object-fit:contain;">`;
+            }
+            
+            document.getElementById('contactModalTitle').textContent = 'Edit Contact';
+            document.getElementById('contactModal').classList.add('active');
         }
-        
-        document.getElementById('contactModalTitle').textContent = 'Edit Contact';
-        document.getElementById('contactModal').classList.add('active');
+    } catch (error) {
+        console.error('Error editing contact:', error);
+        showToast('Failed to load contact data', 'error');
     }
 };
 
@@ -1170,7 +1184,7 @@ document.getElementById('contactForm')?.addEventListener('submit', async (e) => 
         const contactData = {
             name,
             link,
-            description,
+            description: description || null,
             is_active: true
         };
 
@@ -1189,16 +1203,20 @@ document.getElementById('contactForm')?.addEventListener('submit', async (e) => 
                 await deleteFile(oldContact.icon_url, 'contact-icons');
             }
 
-            await supabase
+            const { error } = await supabase
                 .from('contacts')
                 .update(contactData)
                 .eq('id', id);
 
+            if (error) throw error;
+
             showToast('Contact updated!', 'success');
         } else {
-            await supabase
+            const { error } = await supabase
                 .from('contacts')
                 .insert([contactData]);
+
+            if (error) throw error;
 
             showToast('Contact created!', 'success');
         }
@@ -1207,7 +1225,7 @@ document.getElementById('contactForm')?.addEventListener('submit', async (e) => 
         loadContacts();
     } catch (error) {
         console.error('Error saving contact:', error);
-        showToast('Failed to save contact', 'error');
+        showToast('Failed to save contact: ' + error.message, 'error');
     }
 });
 
@@ -1219,14 +1237,17 @@ window.deleteContact = async function(id, iconUrl) {
             await deleteFile(iconUrl, 'contact-icons');
         }
 
-        await supabase
+        const { error } = await supabase
             .from('contacts')
             .delete()
             .eq('id', id);
 
+        if (error) throw error;
+
         showToast('Contact deleted', 'success');
         loadContacts();
     } catch (error) {
+        console.error('Error deleting contact:', error);
         showToast('Failed to delete contact', 'error');
     }
 };
@@ -1278,7 +1299,6 @@ window.showAddNews = async function() {
     document.getElementById('imagesSizeInfo').textContent = '0 MB';
     document.getElementById('videoSizeInfo').textContent = '0 MB';
     
-    // Load contacts for selection
     await loadContacts();
     const contactsSelect = document.getElementById('newsContactsSelect');
     contactsSelect.innerHTML = allContacts.map(contact => `
@@ -1291,14 +1311,12 @@ window.showAddNews = async function() {
     document.getElementById('newsModal').classList.add('active');
 };
 
-// Image files validation and preview
 document.getElementById('newsImages')?.addEventListener('change', function(e) {
     const files = Array.from(e.target.files);
-    const maxSizePerImage = 10 * 1024 * 1024; // 10MB
-    const maxTotalSize = 50 * 1024 * 1024; // 50MB
+    const maxSizePerImage = 10 * 1024 * 1024;
+    const maxTotalSize = 50 * 1024 * 1024;
     
     let totalSize = 0;
-    let validFiles = [];
     const preview = document.getElementById('newsImagesPreview');
     preview.innerHTML = '';
     
@@ -1319,10 +1337,6 @@ document.getElementById('newsImages')?.addEventListener('change', function(e) {
             preview.appendChild(div);
         };
         reader.readAsDataURL(file);
-        
-        if (isValid) {
-            validFiles.push(file);
-        }
     });
     
     document.getElementById('imagesSizeInfo').textContent = (totalSize / 1024 / 1024).toFixed(2) + ' MB';
@@ -1332,12 +1346,11 @@ document.getElementById('newsImages')?.addEventListener('change', function(e) {
     }
 });
 
-// Video file validation and preview
 document.getElementById('newsVideo')?.addEventListener('change', function(e) {
     const file = e.target.files[0];
     if (!file) return;
     
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    const maxSize = 50 * 1024 * 1024;
     const preview = document.getElementById('newsVideoPreview');
     
     document.getElementById('videoSizeInfo').textContent = (file.size / 1024 / 1024).toFixed(2) + ' MB';
@@ -1351,7 +1364,7 @@ document.getElementById('newsVideo')?.addEventListener('change', function(e) {
     
     const reader = new FileReader();
     reader.onload = function(event) {
-        preview.innerHTML = `<video src="${event.target.result}" controls></video>`;
+        preview.innerHTML = `<video src="${event.target.result}" controls style="max-width:100%;"></video>`;
     };
     reader.readAsDataURL(file);
 });
@@ -1365,14 +1378,12 @@ document.getElementById('newsForm')?.addEventListener('submit', async (e) => {
     const imageFiles = Array.from(document.getElementById('newsImages').files);
     const videoFile = document.getElementById('newsVideo').files[0];
     
-    // Get selected contacts
     const selectedContacts = Array.from(document.querySelectorAll('#newsContactsSelect input:checked'))
         .map(input => input.value);
 
     try {
         showToast('Publishing news...', 'warning');
         
-        // Create news entry
         const { data: newsData, error: newsError } = await supabase
             .from('news')
             .insert([{
@@ -1386,9 +1397,8 @@ document.getElementById('newsForm')?.addEventListener('submit', async (e) => {
 
         if (newsError) throw newsError;
 
-        // Upload images
         for (const imageFile of imageFiles) {
-            if (imageFile.size <= 10 * 1024 * 1024) { // Max 10MB per image
+            if (imageFile.size <= 10 * 1024 * 1024) {
                 const url = await uploadFile(imageFile, 'news-media');
                 await supabase
                     .from('news_media')
@@ -1401,8 +1411,7 @@ document.getElementById('newsForm')?.addEventListener('submit', async (e) => {
             }
         }
 
-        // Upload video
-        if (videoFile && videoFile.size <= 50 * 1024 * 1024) { // Max 50MB
+        if (videoFile && videoFile.size <= 50 * 1024 * 1024) {
             const url = await uploadFile(videoFile, 'news-media');
             await supabase
                 .from('news_media')
@@ -1419,7 +1428,7 @@ document.getElementById('newsForm')?.addEventListener('submit', async (e) => {
         loadNews();
     } catch (error) {
         console.error('Error publishing news:', error);
-        showToast('Failed to publish news', 'error');
+        showToast('Failed to publish news: ' + error.message, 'error');
     }
 });
 
@@ -1427,20 +1436,17 @@ window.deleteNews = async function(id) {
     if (!confirm('Are you sure you want to delete this news?')) return;
 
     try {
-        // Get media files
         const { data: media } = await supabase
             .from('news_media')
             .select('*')
             .eq('news_id', id);
 
-        // Delete media files from storage
         if (media) {
             for (const item of media) {
                 await deleteFile(item.media_url, 'news-media');
             }
         }
 
-        // Delete news (cascade will delete media records)
         await supabase
             .from('news')
             .delete()
@@ -1454,7 +1460,8 @@ window.deleteNews = async function(id) {
 };
 
 // ======================================
-// USERS MANAGEMENT
+// USERS, PURCHASES, WITHDRAWALS
+// (Same as before, keeping them as is)
 // ======================================
 
 async function loadUsers() {
@@ -1497,13 +1504,11 @@ window.banUser = async function(userId, ip) {
     if (!confirm('Are you sure you want to ban this user?')) return;
 
     try {
-        // Ban user
         await supabase
             .from('users')
             .update({ is_banned: true })
             .eq('id', userId);
 
-        // Add IP to banned list
         await supabase
             .from('banned_ips')
             .insert([{
@@ -1522,13 +1527,11 @@ window.unbanUser = async function(userId, ip) {
     if (!confirm('Are you sure you want to unban this user?')) return;
 
     try {
-        // Unban user
         await supabase
             .from('users')
             .update({ is_banned: false })
             .eq('id', userId);
 
-        // Remove IP from banned list
         await supabase
             .from('banned_ips')
             .delete()
@@ -1540,10 +1543,6 @@ window.unbanUser = async function(userId, ip) {
         showToast('Failed to unban user', 'error');
     }
 };
-
-// ======================================
-// PLAN PURCHASES MANAGEMENT
-// ======================================
 
 async function loadPurchases() {
     const { data: purchases } = await supabase
@@ -1585,7 +1584,6 @@ window.approvePurchase = async function(purchaseId, userId, planId, durationHour
     if (!confirm('Approve this purchase?')) return;
 
     try {
-        // Get plan details
         const { data: plan } = await supabase
             .from('plans')
             .select('*')
@@ -1597,7 +1595,6 @@ window.approvePurchase = async function(purchaseId, userId, planId, durationHour
             return;
         }
 
-        // Update purchase status
         await supabase
             .from('user_plan_purchases')
             .update({ 
@@ -1606,9 +1603,8 @@ window.approvePurchase = async function(purchaseId, userId, planId, durationHour
             })
             .eq('id', purchaseId);
 
-        // Create mining session
-        const endTime = new Date();
-        endTime.setHours(endTime.getHours() + durationHours);
+        const startTime = new Date();
+        const endTime = new Date(startTime.getTime() + (durationHours * 60 * 60 * 1000));
 
         await supabase
             .from('user_mining_sessions')
@@ -1616,7 +1612,7 @@ window.approvePurchase = async function(purchaseId, userId, planId, durationHour
                 user_id: userId,
                 mining_type: 'plan',
                 plan_id: planId,
-                start_time: new Date().toISOString(),
+                start_time: startTime.toISOString(),
                 end_time: endTime.toISOString(),
                 target_amount: plan.total_amount,
                 current_amount: 0,
@@ -1648,10 +1644,6 @@ window.rejectPurchase = async function(purchaseId) {
         showToast('Failed to reject purchase', 'error');
     }
 };
-
-// ======================================
-// WITHDRAWALS MANAGEMENT
-// ======================================
 
 async function loadWithdrawals() {
     const { data: withdrawals } = await supabase
@@ -1713,7 +1705,6 @@ window.rejectWithdrawal = async function(withdrawalId, userId, amount) {
     if (!confirm('Reject this withdrawal? Amount will be returned to user balance.')) return;
 
     try {
-        // Update withdrawal status
         await supabase
             .from('withdrawal_requests')
             .update({ 
@@ -1722,7 +1713,6 @@ window.rejectWithdrawal = async function(withdrawalId, userId, amount) {
             })
             .eq('id', withdrawalId);
 
-        // Return amount to user balance
         const { data: user } = await supabase
             .from('users')
             .select('balance')
@@ -1781,7 +1771,6 @@ if (document.readyState === 'loading') {
     init();
 }
 
-// Auto-refresh pending actions every 30 seconds
 setInterval(() => {
     if (adminAuthorized) {
         loadPendingActions();
