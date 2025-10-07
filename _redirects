@@ -1,0 +1,17 @@
+# Netlify SPA Routing Configuration
+/register           /index.html         200
+/login              /index.html         200
+/dashboard          /index.html         200
+/mining             /index.html         200
+/plan               /index.html         200
+/history            /index.html         200
+/contacts           /index.html         200
+/news               /index.html         200
+/profile            /index.html         200
+
+# Admin routes
+/admin              /admin.html         200
+/admin/*            /admin.html         200
+
+# Fallback for all other routes
+/*                  /index.html         200
