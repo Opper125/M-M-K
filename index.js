@@ -1,9 +1,8 @@
 /* ======================================
    MY MMK - User Dashboard JavaScript
-   UPDATED VERSION WITH ALL FIXES
+   COMPLETE FIXED VERSION
    ====================================== */
 
-// Supabase Configuration
 const SUPABASE_URL = 'https://qmeeqwdnjlmhjuexldsu.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtZWVxd2RuamxtaGp1ZXhsZHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk4Mzg3MDYsImV4cCI6MjA3NTQxNDcwNn0.tyL8-OQByO7MALrBJCZ6rNZ0oR10DWSJ3776nHBgn7Q';
 
@@ -249,7 +248,6 @@ async function loadSiteSettings() {
     }
 }
 
-// FIXED: Load Mining UI
 async function loadMiningUI() {
     try {
         const { data: ui } = await supabase
@@ -331,6 +329,7 @@ function showPage(pageId) {
 
 async function loadMiningSessions() {
     try {
+        // Check for active sessions
         const { data: sessions } = await supabase
             .from('user_mining_sessions')
             .select('*, plans(*)')
@@ -338,6 +337,11 @@ async function loadMiningSessions() {
             .eq('is_completed', false)
             .order('created_at', { ascending: false });
 
+        // Reset display
+        const startBtn = document.getElementById('startMiningBtn');
+        const miningIcon = document.getElementById('miningIcon');
+        const miningProgress = document.getElementById('miningProgress');
+        
         if (sessions && sessions.length > 0) {
             sessions.forEach(session => {
                 if (session.mining_type === 'free') {
@@ -349,17 +353,28 @@ async function loadMiningSessions() {
                 }
             });
         } else {
-            document.getElementById('startMiningBtn').style.display = 'inline-flex';
-            document.getElementById('startMiningBtn').disabled = false;
+            // No active sessions - show start button
+            startBtn.style.display = 'inline-flex';
+            startBtn.disabled = false;
+            miningIcon.classList.remove('mining-active');
+            miningProgress.classList.add('hidden');
+            
+            document.getElementById('miningTypeName').textContent = 'Free Mining Available';
+            document.getElementById('miningRate').textContent = 'Click Start to begin mining';
+            document.getElementById('miningAmount').textContent = '0 MMK';
+            document.getElementById('miningTimer').textContent = '';
+            
+            // Reload mining UI
+            await loadMiningUI();
         }
     } catch (error) {
         console.error('Error loading mining sessions:', error);
     }
 }
 
-// FIXED: Start Free Mining with Duration
 async function startFreeMiningSession() {
     try {
+        // Get active free mining settings
         const { data: settings } = await supabase
             .from('free_mining_settings')
             .select('*')
@@ -367,7 +382,7 @@ async function startFreeMiningSession() {
             .single();
 
         if (!settings) {
-            showToast('Free mining not available', 'error');
+            showToast('Free mining not available at the moment', 'error');
             return;
         }
 
@@ -385,10 +400,18 @@ async function startFreeMiningSession() {
             return;
         }
 
-        // Calculate end time based on duration
+        // Calculate end time based on duration_hours from when they start
         const startTime = new Date();
         const endTime = new Date(startTime.getTime() + (settings.duration_hours * 60 * 60 * 1000));
 
+        console.log('Creating free mining session:', {
+            duration_hours: settings.duration_hours,
+            amount: settings.amount,
+            start_time: startTime.toISOString(),
+            end_time: endTime.toISOString()
+        });
+
+        // Create mining session
         const { data: session, error } = await supabase
             .from('user_mining_sessions')
             .insert([{
@@ -397,26 +420,35 @@ async function startFreeMiningSession() {
                 start_time: startTime.toISOString(),
                 end_time: endTime.toISOString(),
                 target_amount: parseFloat(settings.amount),
-                current_amount: 0
+                current_amount: 0,
+                is_completed: false
             }])
             .select()
             .single();
 
-        if (error) throw error;
+        if (error) {
+            console.error('Error creating session:', error);
+            throw error;
+        }
+
+        console.log('Session created:', session);
 
         activeFreeSession = session;
         startFreeMining(session);
         showToast('Free mining started!', 'success');
         
-        // Disable start button
+        // Hide start button
         document.getElementById('startMiningBtn').style.display = 'none';
+        
     } catch (error) {
         console.error('Error starting free mining:', error);
-        showToast('Failed to start mining', 'error');
+        showToast('Failed to start mining: ' + error.message, 'error');
     }
 }
 
 function startFreeMining(session) {
+    console.log('Starting free mining display for session:', session);
+    
     const miningIcon = document.getElementById('miningIcon');
     const miningTypeName = document.getElementById('miningTypeName');
     const miningRate = document.getElementById('miningRate');
@@ -425,44 +457,64 @@ function startFreeMining(session) {
     const miningProgress = document.getElementById('miningProgress');
     const startBtn = document.getElementById('startMiningBtn');
 
+    // Update UI
     miningTypeName.textContent = 'Free Mining';
     miningProgress.classList.remove('hidden');
     miningIcon.classList.add('mining-active');
     
-    // Hide and disable start button
+    // Hide start button
     startBtn.style.display = 'none';
     startBtn.disabled = true;
 
+    // Calculate mining rate
     const startTime = new Date(session.start_time);
     const endTime = new Date(session.end_time);
     const totalSeconds = (endTime - startTime) / 1000;
     const ratePerSecond = session.target_amount / totalSeconds;
 
+    console.log('Mining calculations:', {
+        startTime,
+        endTime,
+        totalSeconds,
+        ratePerSecond,
+        targetAmount: session.target_amount
+    });
+
     miningRate.textContent = `${formatCurrency(ratePerSecond * 60)} MMK/minute`;
 
+    // Start mining counter
     const interval = setInterval(async () => {
         const now = new Date();
         const elapsed = (now - startTime) / 1000;
         const remaining = totalSeconds - elapsed;
 
+        console.log('Mining tick:', { elapsed, remaining, totalSeconds });
+
+        // Check if mining completed
         if (remaining <= 0 || elapsed >= totalSeconds) {
             clearInterval(interval);
+            console.log('Mining completed, calling completeMiningSession');
             await completeMiningSession(session.id);
             return;
         }
 
+        // Calculate current amount
         const currentAmount = Math.min(elapsed * ratePerSecond, session.target_amount);
         
+        // Update display
         miningAmount.textContent = formatCurrency(currentAmount) + ' MMK';
         
+        // Update timer
         const hours = Math.floor(remaining / 3600);
         const minutes = Math.floor((remaining % 3600) / 60);
         const seconds = Math.floor(remaining % 60);
         miningTimer.textContent = `${hours}h ${minutes}m ${seconds}s remaining`;
 
+        // Update progress bar
         const progress = (elapsed / totalSeconds) * 100;
         document.querySelector('.progress-fill').style.width = progress + '%';
 
+        // Update database every 10 seconds
         if (Math.floor(elapsed) % 10 === 0) {
             await supabase
                 .from('user_mining_sessions')
@@ -478,6 +530,7 @@ function startPlanMining(session) {
     const hasFreeMining = activeFreeSession && !activeFreeSession.is_completed;
     
     if (hasFreeMining) {
+        // Show in secondary area
         const secondaryMining = document.getElementById('secondaryMining');
         secondaryMining.classList.remove('hidden');
         
@@ -529,10 +582,12 @@ function displayPlanMiningMain(session) {
     const miningAmount = document.getElementById('miningAmount');
     const miningTimer = document.getElementById('miningTimer');
     const miningProgress = document.getElementById('miningProgress');
+    const startBtn = document.getElementById('startMiningBtn');
 
     miningTypeName.textContent = session.plans?.name || 'Plan Mining';
     miningProgress.classList.remove('hidden');
     miningIcon.classList.add('mining-active');
+    startBtn.style.display = 'none';
 
     if (session.plans?.ui_url) {
         miningIcon.innerHTML = `<img src="${session.plans.ui_url}" alt="Plan" style="width:100%;height:100%;object-fit:cover;border-radius:24px;">`;
@@ -579,6 +634,7 @@ function displayPlanMiningMain(session) {
 }
 
 function switchMiningDisplay(type) {
+    // Clear all intervals
     miningIntervals.forEach(interval => clearInterval(interval));
     miningIntervals = [];
 
@@ -605,44 +661,79 @@ function switchMiningDisplay(type) {
 
 async function completeMiningSession(sessionId) {
     try {
+        console.log('Completing mining session:', sessionId);
+        
+        // Get session details
         const { data: session } = await supabase
+            .from('user_mining_sessions')
+            .select('*')
+            .eq('id', sessionId)
+            .single();
+
+        if (!session) {
+            console.error('Session not found');
+            return;
+        }
+
+        console.log('Session to complete:', session);
+
+        // Mark session as completed
+        const { error: updateError } = await supabase
             .from('user_mining_sessions')
             .update({ 
                 is_completed: true,
-                current_amount: supabase.raw('target_amount')
+                current_amount: session.target_amount,
+                completed_at: new Date().toISOString()
             })
-            .eq('id', sessionId)
-            .select()
-            .single();
+            .eq('id', sessionId);
 
+        if (updateError) {
+            console.error('Error updating session:', updateError);
+            throw updateError;
+        }
+
+        // Update user balance will be handled by trigger
         await updateUserBalance();
         
-        showToast('Mining completed! ' + formatCurrency(session.target_amount) + ' MMK added to balance', 'success');
+        showToast(`Mining completed! ${formatCurrency(session.target_amount)} MMK added to balance`, 'success');
+
+        // Clear intervals
+        miningIntervals.forEach(interval => clearInterval(interval));
+        miningIntervals = [];
 
         if (session.mining_type === 'free') {
             activeFreeSession = null;
+            
+            // Reset UI to show start button again
             const startBtn = document.getElementById('startMiningBtn');
             startBtn.style.display = 'inline-flex';
             startBtn.disabled = false;
             
             document.getElementById('miningIcon').classList.remove('mining-active');
             document.getElementById('miningProgress').classList.add('hidden');
-            document.getElementById('miningTypeName').textContent = 'Start Mining';
-            document.getElementById('miningRate').textContent = 'Click to start';
+            document.getElementById('miningTypeName').textContent = 'Free Mining Available';
+            document.getElementById('miningRate').textContent = 'Click Start to begin mining';
             document.getElementById('miningAmount').textContent = '0 MMK';
             document.getElementById('miningTimer').textContent = '';
+            
+            // Reload mining UI
+            await loadMiningUI();
         } else {
             activePlanSession = null;
+            document.getElementById('secondaryMining').classList.add('hidden');
         }
 
+        // Reload sessions to check if there are more
         await loadMiningSessions();
+        
     } catch (error) {
         console.error('Error completing mining:', error);
+        showToast('Error completing mining session', 'error');
     }
 }
 
 // ======================================
-// PLANS SYSTEM (Continued from Part 1)
+// PLANS SYSTEM
 // ======================================
 
 async function loadPlans() {
@@ -695,101 +786,123 @@ async function loadPlans() {
 }
 
 async function buyPlan(planId) {
-    // Check if user already has an active plan
-    const { data: activePurchase } = await supabase
-        .from('user_plan_purchases')
-        .select('*, user_mining_sessions!inner(*)')
-        .eq('user_id', currentUser.id)
-        .eq('status', 'approved')
-        .eq('user_mining_sessions.is_completed', false)
-        .single();
+    try {
+        // Check if user already has an active plan
+        const { data: activeSessions } = await supabase
+            .from('user_mining_sessions')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .eq('mining_type', 'plan')
+            .eq('is_completed', false);
 
-    if (activePurchase) {
-        showToast('You already have an active plan. Complete it before buying a new one.', 'warning');
-        return;
-    }
+        if (activeSessions && activeSessions.length > 0) {
+            showToast('You already have an active plan. Complete it before buying a new one.', 'warning');
+            return;
+        }
 
-    const { data: plan } = await supabase
-        .from('plans')
-        .select('*')
-        .eq('id', planId)
-        .single();
+        // Get plan details
+        const { data: plan } = await supabase
+            .from('plans')
+            .select('*')
+            .eq('id', planId)
+            .single();
 
-    const { data: payments } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('is_active', true);
+        if (!plan) {
+            showToast('Plan not found', 'error');
+            return;
+        }
 
-    if (!payments || payments.length === 0) {
-        showToast('No payment methods available', 'error');
-        return;
-    }
+        // Load payment options
+        const { data: payments } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('is_active', true);
 
-    const modal = document.getElementById('planPurchaseModal');
-    const content = document.getElementById('planPurchaseContent');
-    
-    content.innerHTML = `
-        <div class="plan-summary" style="background: var(--dark-bg); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
-            <h4>${plan.name}</h4>
-            <p>Price: ${formatCurrency(plan.price)} MMK</p>
-        </div>
+        if (!payments || payments.length === 0) {
+            showToast('No payment methods available', 'error');
+            return;
+        }
+
+        // Show payment modal
+        const modal = document.getElementById('planPurchaseModal');
+        const content = document.getElementById('planPurchaseContent');
         
-        <h4 style="margin-bottom: 12px;">Select Payment Method:</h4>
-        <div class="payment-options">
-            ${payments.map(payment => `
-                <div class="payment-option" data-payment-id="${payment.id}">
-                    ${payment.icon_url ? `<img src="${payment.icon_url}" alt="${payment.name}">` : '<i class="fas fa-wallet"></i>'}
-                    <div class="payment-option-info">
-                        <h4>${payment.name}</h4>
-                        <p>Click to select</p>
-                    </div>
-                </div>
-            `).join('')}
-        </div>
-        
-        <div id="paymentDetailsSection" class="hidden">
-            <div class="payment-details" id="selectedPaymentDetails"></div>
-            
-            <div class="form-group">
-                <label>Transaction Last 6 Digits</label>
-                <input type="text" id="transactionLast6" maxlength="6" pattern="[0-9A-Za-z]{6}" placeholder="Enter last 6 digits" required>
+        content.innerHTML = `
+            <div class="plan-summary" style="background: var(--dark-bg); padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+                <h4>${plan.name}</h4>
+                <p>Duration: ${plan.duration_hours} hours</p>
+                <p>Mining Amount: ${formatCurrency(plan.total_amount)} MMK</p>
+                <p style="color: var(--primary-color); font-size: 20px; font-weight: bold; margin-top: 10px;">Price: ${formatCurrency(plan.price)} MMK</p>
             </div>
             
-            <button class="btn-primary" onclick="submitPlanPurchase('${planId}')">
-                <i class="fas fa-check"></i> Submit Purchase
-            </button>
-        </div>
-    `;
+            <h4 style="margin-bottom: 12px;">Select Payment Method:</h4>
+            <div class="payment-options">
+                ${payments.map(payment => `
+                    <div class="payment-option" data-payment-id="${payment.id}">
+                        ${payment.icon_url ? `<img src="${payment.icon_url}" alt="${payment.name}">` : '<i class="fas fa-wallet" style="font-size:48px;"></i>'}
+                        <div class="payment-option-info">
+                            <h4>${payment.name}</h4>
+                            <p>Click to select</p>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+            
+            <div id="paymentDetailsSection" class="hidden">
+                <div class="payment-details" id="selectedPaymentDetails"></div>
+                
+                <div class="form-group">
+                    <label>Transaction Last 6 Digits</label>
+                    <input type="text" id="transactionLast6" maxlength="6" pattern="[0-9A-Za-z]{6}" placeholder="Enter last 6 digits of transaction ID" required>
+                    <small class="text-muted">Enter the last 6 characters of your payment transaction ID</small>
+                </div>
+                
+                <button class="btn-primary" onclick="submitPlanPurchase('${planId}')">
+                    <i class="fas fa-check"></i> Submit Purchase
+                </button>
+            </div>
+        `;
 
-    modal.classList.add('active');
+        modal.classList.add('active');
 
-    document.querySelectorAll('.payment-option').forEach(option => {
-        option.onclick = function() {
-            document.querySelectorAll('.payment-option').forEach(opt => opt.classList.remove('selected'));
-            this.classList.add('selected');
-            
-            const paymentId = this.dataset.paymentId;
-            const payment = payments.find(p => p.id === paymentId);
-            
-            document.getElementById('selectedPaymentDetails').innerHTML = `
-                <h4>${payment.name}</h4>
-                <div class="payment-detail-item">
-                    <label>Payment Address:</label>
-                    <p>${payment.address}</p>
-                </div>
-                <div class="payment-detail-item">
-                    <label>Instructions:</label>
-                    <p>${payment.instructions || 'Please transfer the exact amount and submit the transaction details.'}</p>
-                </div>
-                <div class="payment-detail-item">
-                    <label>Amount to Pay:</label>
-                    <p style="color: var(--primary-color); font-size: 20px; font-weight: bold;">${formatCurrency(plan.price)} MMK</p>
-                </div>
-            `;
-            
-            document.getElementById('paymentDetailsSection').classList.remove('hidden');
-        };
-    });
+        // Add payment selection listeners
+        document.querySelectorAll('.payment-option').forEach(option => {
+            option.onclick = function() {
+                document.querySelectorAll('.payment-option').forEach(opt => opt.classList.remove('selected'));
+                this.classList.add('selected');
+                
+                const paymentId = this.dataset.paymentId;
+                const payment = payments.find(p => p.id === paymentId);
+                
+                document.getElementById('selectedPaymentDetails').innerHTML = `
+                    <h4>${payment.name}</h4>
+                    <div class="payment-detail-item">
+                        <label>Payment Address:</label>
+                        <p>${payment.address}</p>
+                    </div>
+                    ${payment.instructions ? `
+                        <div class="payment-detail-item">
+                            <label>Instructions:</label>
+                            <p>${payment.instructions}</p>
+                        </div>
+                    ` : ''}
+                    <div class="payment-detail-item">
+                        <label>Amount to Pay:</label>
+                        <p style="color: var(--primary-color); font-size: 22px; font-weight: bold;">${formatCurrency(plan.price)} MMK</p>
+                    </div>
+                    <div class="payment-detail-item" style="background: rgba(245, 158, 11, 0.1); padding: 12px; border-radius: 8px; border: 1px solid var(--warning-color);">
+                        <label style="color: var(--warning-color);">⚠️ Important:</label>
+                        <p style="color: var(--warning-color); font-size: 13px;">Please transfer the exact amount and save your transaction ID. You'll need the last 6 digits.</p>
+                    </div>
+                `;
+                
+                document.getElementById('paymentDetailsSection').classList.remove('hidden');
+            };
+        });
+    } catch (error) {
+        console.error('Error buying plan:', error);
+        showToast('Failed to load payment options', 'error');
+    }
 }
 
 window.submitPlanPurchase = async function(planId) {
@@ -799,7 +912,7 @@ window.submitPlanPurchase = async function(planId) {
         return;
     }
 
-    const transactionLast6 = document.getElementById('transactionLast6').value;
+    const transactionLast6 = document.getElementById('transactionLast6').value.trim();
     if (!transactionLast6 || transactionLast6.length !== 6) {
         showToast('Please enter valid transaction last 6 digits', 'error');
         return;
@@ -812,7 +925,7 @@ window.submitPlanPurchase = async function(planId) {
                 user_id: currentUser.id,
                 plan_id: planId,
                 payment_id: selectedPayment.dataset.paymentId,
-                transaction_last_6: transactionLast6,
+                transaction_last_6: transactionLast6.toUpperCase(),
                 status: 'pending'
             }])
             .select()
@@ -820,7 +933,7 @@ window.submitPlanPurchase = async function(planId) {
 
         if (error) throw error;
 
-        showToast('Purchase request submitted! Please wait for approval.', 'success');
+        showToast('Purchase request submitted successfully! Please wait for admin approval.', 'success');
         document.getElementById('planPurchaseModal').classList.remove('active');
         
         await loadPlans();
@@ -907,7 +1020,7 @@ async function loadFreeHistory() {
 async function loadPurchaseHistory() {
     const { data: purchases } = await supabase
         .from('user_plan_purchases')
-        .select('*, plans(*), payments(*)')
+        .select('*, plans(name, price), payments(name)')
         .eq('user_id', currentUser.id)
         .order('purchased_at', { ascending: false });
 
@@ -930,6 +1043,10 @@ async function loadPurchaseHistory() {
                     <span>${purchase.order_number}</span>
                 </div>
                 <div class="history-detail-row">
+                    <span>Amount</span>
+                    <span>${formatCurrency(purchase.plans?.price || 0)} MMK</span>
+                </div>
+                <div class="history-detail-row">
                     <span>Payment</span>
                     <span>${purchase.payments?.name || 'N/A'}</span>
                 </div>
@@ -941,6 +1058,12 @@ async function loadPurchaseHistory() {
                     <span>Date</span>
                     <span>${formatDate(purchase.purchased_at)}</span>
                 </div>
+                ${purchase.status === 'approved' && purchase.approved_at ? `
+                    <div class="history-detail-row">
+                        <span>Approved At</span>
+                        <span>${formatDate(purchase.approved_at)}</span>
+                    </div>
+                ` : ''}
             </div>
         </div>
     `).join('');
@@ -966,7 +1089,10 @@ async function loadContacts() {
 
     container.innerHTML = contacts.map(contact => `
         <div class="contact-card" onclick="window.open('${contact.link}', '_blank')">
-            ${contact.icon_url ? `<img src="${contact.icon_url}" alt="${contact.name}" class="contact-icon">` : '<i class="fas fa-link" style="font-size: 48px; color: var(--primary-color);"></i>'}
+            ${contact.icon_url ? 
+                `<img src="${contact.icon_url}" alt="${contact.name}" class="contact-icon">` : 
+                '<i class="fas fa-link" style="font-size: 48px; color: var(--primary-color);"></i>'
+            }
             <h3>${contact.name}</h3>
             <p>${contact.description || 'Click to contact'}</p>
         </div>
@@ -981,6 +1107,7 @@ async function loadNews() {
     const { data: news } = await supabase
         .from('news')
         .select('*, news_media(*)')
+        .eq('is_published', true)
         .order('created_at', { ascending: false });
 
     const container = document.getElementById('newsContainer');
@@ -992,16 +1119,21 @@ async function loadNews() {
 
     container.innerHTML = news.map(item => {
         const firstImage = item.news_media?.find(m => m.media_type === 'image');
+        const mediaCount = item.news_media?.length || 0;
         
         return `
             <div class="news-card" onclick="showNewsDetail('${item.id}')">
-                ${firstImage ? `<img src="${firstImage.media_url}" alt="News" class="news-preview-image">` : ''}
+                ${firstImage ? 
+                    `<img src="${firstImage.media_url}" alt="News" class="news-preview-image">` : 
+                    ''
+                }
                 <div class="news-preview-content">
                     <h3>${item.title}</h3>
-                    <p>${item.content.substring(0, 120)}...</p>
+                    <p>${item.content.substring(0, 150)}${item.content.length > 150 ? '...' : ''}</p>
                     <div class="news-meta">
                         <span><i class="fas fa-calendar"></i> ${formatDate(item.created_at)}</span>
-                        ${item.news_media && item.news_media.length > 0 ? `<span><i class="fas fa-images"></i> ${item.news_media.length} media</span>` : ''}
+                        ${mediaCount > 0 ? `<span><i class="fas fa-images"></i> ${mediaCount} media</span>` : ''}
+                        ${item.youtube_url ? `<span><i class="fab fa-youtube"></i> Video</span>` : ''}
                     </div>
                     <button class="btn-read-more">Read More <i class="fas fa-arrow-right"></i></button>
                 </div>
@@ -1011,89 +1143,102 @@ async function loadNews() {
 }
 
 window.showNewsDetail = async function(newsId) {
-    const { data: item } = await supabase
-        .from('news')
-        .select('*, news_media(*)')
-        .eq('id', newsId)
-        .single();
+    try {
+        const { data: item } = await supabase
+            .from('news')
+            .select('*, news_media(*)')
+            .eq('id', newsId)
+            .single();
 
-    if (!item) return;
+        if (!item) return;
 
-    let contactsHTML = '';
-    if (item.contact_ids && item.contact_ids.length > 0) {
-        const { data: contacts } = await supabase
-            .from('contacts')
-            .select('*')
-            .in('id', item.contact_ids);
-        
-        if (contacts && contacts.length > 0) {
-            contactsHTML = `
-                <div class="news-contacts">
-                    <h4>Contact Us:</h4>
-                    <div class="news-contact-buttons">
-                        ${contacts.map(contact => `
-                            <a href="${contact.link}" target="_blank" class="news-contact-btn">
-                                ${contact.icon_url ? `<img src="${contact.icon_url}" class="news-contact-icon">` : ''}
-                                ${contact.name}
-                            </a>
-                        `).join('')}
+        // Build contacts HTML
+        let contactsHTML = '';
+        if (item.contact_ids && item.contact_ids.length > 0) {
+            const { data: contacts } = await supabase
+                .from('contacts')
+                .select('*')
+                .in('id', item.contact_ids);
+            
+            if (contacts && contacts.length > 0) {
+                contactsHTML = `
+                    <div class="news-contacts">
+                        <h4>Contact Us:</h4>
+                        <div class="news-contact-buttons">
+                            ${contacts.map(contact => `
+                                <a href="${contact.link}" target="_blank" class="news-contact-btn">
+                                    ${contact.icon_url ? `<img src="${contact.icon_url}" class="news-contact-icon">` : '<i class="fas fa-link"></i>'}
+                                    ${contact.name}
+                                </a>
+                            `).join('')}
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
         }
-    }
 
-    let mediaHTML = '';
-    if (item.news_media && item.news_media.length > 0) {
-        const images = item.news_media.filter(m => m.media_type === 'image');
-        const videos = item.news_media.filter(m => m.media_type === 'video');
-        
-        if (images.length > 0) {
-            mediaHTML += `
-                <div class="news-images-grid">
-                    ${images.map(img => `<img src="${img.media_url}" alt="News" onclick="window.open('${img.media_url}', '_blank')">`).join('')}
-                </div>
-            `;
-        }
-        
-        if (videos.length > 0) {
-            mediaHTML += videos.map(vid => `<video src="${vid.media_url}" controls class="news-video"></video>`).join('');
-        }
-    }
-
-    if (item.youtube_url) {
-        let videoId = '';
-        if (item.youtube_url.includes('youtube.com/watch?v=')) {
-            videoId = item.youtube_url.split('v=')[1].split('&')[0];
-        } else if (item.youtube_url.includes('youtu.be/')) {
-            videoId = item.youtube_url.split('youtu.be/')[1].split('?')[0];
-        } else if (item.youtube_url.includes('youtube.com/shorts/')) {
-            videoId = item.youtube_url.split('shorts/')[1].split('?')[0];
-        }
-        
-        if (videoId) {
-            mediaHTML += `<iframe src="https://www.youtube.com/embed/${videoId}" class="news-youtube" allowfullscreen></iframe>`;
-        }
-    }
-
-    const modalHTML = `
-        <div class="modal active" id="newsDetailModal">
-            <div class="modal-content large">
-                <span class="close" onclick="document.getElementById('newsDetailModal').remove()">&times;</span>
-                <div class="news-detail-content">
-                    <h2>${item.title}</h2>
-                    ${mediaHTML}
-                    <div class="news-full-content">
-                        <p>${item.content}</p>
+        // Build media HTML
+        let mediaHTML = '';
+        if (item.news_media && item.news_media.length > 0) {
+            const images = item.news_media.filter(m => m.media_type === 'image');
+            const videos = item.news_media.filter(m => m.media_type === 'video');
+            
+            if (images.length > 0) {
+                mediaHTML += `
+                    <div class="news-images-grid">
+                        ${images.map(img => 
+                            `<img src="${img.media_url}" alt="News" onclick="window.open('${img.media_url}', '_blank')" style="cursor:pointer;">`
+                        ).join('')}
                     </div>
-                    ${contactsHTML}
-                    <p class="news-date"><i class="fas fa-calendar"></i> ${formatDate(item.created_at)}</p>
+                `;
+            }
+            
+            if (videos.length > 0) {
+                mediaHTML += videos.map(vid => 
+                    `<video src="${vid.media_url}" controls class="news-video"></video>`
+                ).join('');
+            }
+        }
+
+        // Add YouTube video
+        if (item.youtube_url) {
+            let videoId = '';
+            if (item.youtube_url.includes('youtube.com/watch?v=')) {
+                videoId = item.youtube_url.split('v=')[1].split('&')[0];
+            } else if (item.youtube_url.includes('youtu.be/')) {
+                videoId = item.youtube_url.split('youtu.be/')[1].split('?')[0];
+            } else if (item.youtube_url.includes('youtube.com/shorts/')) {
+                videoId = item.youtube_url.split('shorts/')[1].split('?')[0];
+            }
+            
+            if (videoId) {
+                mediaHTML += `<iframe src="https://www.youtube.com/embed/${videoId}" class="news-youtube" allowfullscreen></iframe>`;
+            }
+        }
+
+        // Create modal
+        const modalHTML = `
+            <div class="modal active" id="newsDetailModal" onclick="if(event.target === this) this.remove()">
+                <div class="modal-content large">
+                    <span class="close" onclick="document.getElementById('newsDetailModal').remove()">&times;</span>
+                    <div class="news-detail-content">
+                        <h2>${item.title}</h2>
+                        ${mediaHTML}
+                        <div class="news-full-content">
+                            <p style="white-space: pre-wrap;">${item.content}</p>
+                        </div>
+                        ${contactsHTML}
+                        <p class="news-date"><i class="fas fa-calendar"></i> Published on ${formatDate(item.created_at)}</p>
+                    </div>
                 </div>
             </div>
-        </div>
-    `;
+        `;
 
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    } catch (error) {
+        console.error('Error loading news detail:', error);
+        showToast('Failed to load news details', 'error');
+    }
 };
 
 // ======================================
@@ -1139,17 +1284,23 @@ async function loadWithdrawalHistory() {
                     <span>${withdrawal.payment_address}</span>
                 </div>
                 <div class="history-detail-row">
-                    <span>Date</span>
+                    <span>Requested</span>
                     <span>${formatDate(withdrawal.requested_at)}</span>
                 </div>
+                ${withdrawal.processed_at ? `
+                    <div class="history-detail-row">
+                        <span>Processed</span>
+                        <span>${formatDate(withdrawal.processed_at)}</span>
+                    </div>
+                ` : ''}
             </div>
         </div>
     `).join('');
 }
 
 document.getElementById('updateProfileBtn')?.addEventListener('click', async () => {
-    const newPassword = document.getElementById('profileNewPassword').value;
-    const newPin = document.getElementById('profileNewPin').value;
+    const newPassword = document.getElementById('profileNewPassword').value.trim();
+    const newPin = document.getElementById('profileNewPin').value.trim();
 
     const updates = {};
     if (newPassword) updates.password = newPassword;
@@ -1167,6 +1318,10 @@ document.getElementById('updateProfileBtn')?.addEventListener('click', async () 
             .eq('id', currentUser.id);
 
         if (error) throw error;
+
+        // Update current user object
+        if (updates.password) currentUser.password = updates.password;
+        if (updates.withdraw_pin) currentUser.withdraw_pin = updates.withdraw_pin;
 
         showToast('Profile updated successfully', 'success');
         
@@ -1188,16 +1343,18 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
     e.preventDefault();
     
     const amount = parseFloat(document.getElementById('withdrawAmount').value);
-    const paymentType = document.getElementById('withdrawPaymentType').value;
-    const accountName = document.getElementById('withdrawAccountName').value;
-    const paymentAddress = document.getElementById('withdrawPaymentAddress').value;
-    const pin = document.getElementById('withdrawPin').value;
+    const paymentType = document.getElementById('withdrawPaymentType').value.trim();
+    const accountName = document.getElementById('withdrawAccountName').value.trim();
+    const paymentAddress = document.getElementById('withdrawPaymentAddress').value.trim();
+    const pin = document.getElementById('withdrawPin').value.trim();
 
+    // Verify PIN
     if (pin !== currentUser.withdraw_pin) {
         showToast('Invalid withdrawal PIN', 'error');
         return;
     }
 
+    // Check withdrawal limits
     const { data: checkResult } = await supabase
         .rpc('check_withdrawal_limits', {
             p_user_id: currentUser.id,
@@ -1213,6 +1370,7 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
     }
 
     try {
+        // Deduct from balance temporarily
         const { error: balanceError } = await supabase
             .from('users')
             .update({ balance: currentUser.balance - amount })
@@ -1220,6 +1378,7 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
 
         if (balanceError) throw balanceError;
 
+        // Create withdrawal request
         const { error } = await supabase
             .from('withdrawal_requests')
             .insert([{
@@ -1243,6 +1402,7 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
         console.error('Error submitting withdrawal:', error);
         showToast('Failed to submit withdrawal request', 'error');
         
+        // Restore balance if failed
         await supabase
             .from('users')
             .update({ balance: currentUser.balance })
@@ -1254,6 +1414,7 @@ document.getElementById('withdrawalForm')?.addEventListener('submit', async (e) 
 // EVENT LISTENERS
 // ======================================
 
+// Auth Form Switching
 document.getElementById('showLogin')?.addEventListener('click', (e) => {
     e.preventDefault();
     document.getElementById('registerForm').classList.add('hidden');
@@ -1268,23 +1429,31 @@ document.getElementById('showRegister')?.addEventListener('click', (e) => {
     updateURL('/register');
 });
 
+// Register Form
 document.getElementById('registerFormElement')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('regUsername').value;
+    const username = document.getElementById('regUsername').value.trim();
     const password = document.getElementById('regPassword').value;
-    const pin = document.getElementById('regPin').value;
+    const pin = document.getElementById('regPin').value.trim();
+    
+    if (pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+        showToast('PIN must be exactly 6 digits', 'error');
+        return;
+    }
     
     await registerUser(username, password, pin);
 });
 
+// Login Form
 document.getElementById('loginFormElement')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const username = document.getElementById('loginUsername').value;
+    const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
     
     await loginUser(username, password);
 });
 
+// Navigation
 document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const pageId = btn.dataset.page;
@@ -1292,6 +1461,7 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     });
 });
 
+// History Tabs
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         const tabId = btn.dataset.tab;
@@ -1304,14 +1474,20 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
-document.getElementById('startMiningBtn')?.addEventListener('click', startFreeMiningSession);
+// Start Mining Button
+document.getElementById('startMiningBtn')?.addEventListener('click', () => {
+    console.log('Start mining button clicked');
+    startFreeMiningSession();
+});
 
+// Modal Close Buttons
 document.querySelectorAll('.modal .close').forEach(closeBtn => {
     closeBtn.addEventListener('click', () => {
         closeBtn.closest('.modal').classList.remove('active');
     });
 });
 
+// Close modal on outside click
 document.querySelectorAll('.modal').forEach(modal => {
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
@@ -1326,28 +1502,72 @@ document.querySelectorAll('.modal').forEach(modal => {
 
 async function init() {
     try {
+        console.log('Initializing application...');
+        
+        // Get user IP
         userIP = await getUserIP();
+        console.log('User IP:', userIP);
+        
+        // Check if IP is banned
         await checkIPBan(userIP);
         
+        // Check auto login
         const autoLoggedIn = await checkAutoLogin();
         
         if (!autoLoggedIn) {
+            // Show auth container
             document.getElementById('authContainer').classList.remove('hidden');
             updateURL('/register');
         }
         
+        // Hide loading screen
         document.getElementById('loadingScreen').style.display = 'none';
+        
+        console.log('Application initialized successfully');
     } catch (error) {
         console.error('Initialization error:', error);
+        document.getElementById('loadingScreen').style.display = 'none';
+        showToast('Failed to initialize application', 'error');
     }
 }
 
+// Start app when DOM is ready
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
     init();
 }
 
+// Handle browser back/forward
 window.addEventListener('popstate', () => {
     // Handle URL changes if needed
+    console.log('URL changed:', window.location.pathname);
 });
+
+// Cleanup intervals on page unload
+window.addEventListener('beforeunload', () => {
+    miningIntervals.forEach(interval => clearInterval(interval));
+});
+
+// Prevent multiple clicks on buttons
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('btn-primary') || 
+        e.target.classList.contains('btn-mining') ||
+        e.target.closest('.btn-primary') ||
+        e.target.closest('.btn-mining')) {
+        const btn = e.target.classList.contains('btn-primary') || e.target.classList.contains('btn-mining') 
+            ? e.target 
+            : e.target.closest('.btn-primary, .btn-mining');
+        
+        if (btn.disabled) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }
+    }
+}, true);
+
+console.log('MY MMK Mining Platform - User Dashboard Loaded');
+console.log('Version: 1.0.0');
+console.log('Database: Supabase');
+console.log('Ready to mine! 🚀');
