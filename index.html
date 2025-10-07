@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="my">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,7 +21,7 @@
         <!-- Register Form -->
         <div id="registerForm" class="auth-form">
             <div class="auth-header">
-                <img id="siteLogo" src="" alt="Logo" class="site-logo">
+                <img id="siteLogo" src="" alt="Logo" class="site-logo" style="display:none;">
                 <h1 id="siteName">MY MMK</h1>
                 <p>Create Your Mining Account</p>
             </div>
@@ -49,7 +49,7 @@
         <!-- Login Form -->
         <div id="loginForm" class="auth-form hidden">
             <div class="auth-header">
-                <img id="siteLogoLogin" src="" alt="Logo" class="site-logo">
+                <img id="siteLogoLogin" src="" alt="Logo" class="site-logo" style="display:none;">
                 <h1 id="siteNameLogin">MY MMK</h1>
                 <p>Login to Your Account</p>
             </div>
@@ -76,7 +76,7 @@
         <!-- Header -->
         <header class="dashboard-header">
             <div class="header-content">
-                <img id="dashboardLogo" src="" alt="Logo" class="header-logo">
+                <img id="dashboardLogo" src="" alt="Logo" class="header-logo" style="display:none;">
                 <h2 id="dashboardSiteName">MY MMK</h2>
             </div>
             <div class="header-balance">
@@ -119,8 +119,8 @@
                                 <i class="fas fa-pickaxe"></i>
                             </div>
                             <div class="mining-info">
-                                <h4 id="miningTypeName">Start Mining</h4>
-                                <p id="miningRate">Click to start</p>
+                                <h4 id="miningTypeName">Free Mining Available</h4>
+                                <p id="miningRate">Click Start to begin mining</p>
                                 <div class="progress-bar hidden" id="miningProgress">
                                     <div class="progress-fill"></div>
                                 </div>
@@ -323,7 +323,7 @@
         </div>
     </div>
 
-    <!-- Notification Toast -->
+    <!-- Toast Notification -->
     <div id="toast" class="toast"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
