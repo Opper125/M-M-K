@@ -393,35 +393,32 @@
         </main>
     </div>
 
-    <!-- Modals -->
-    <!-- Free Mining Modal -->
-    <div id="freeMiningModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2><i class="fas fa-clock"></i> Free Mining Setting</h2>
-                <span class="close">&times;</span>
-            </div>
-            <div class="modal-body">
-                <form id="freeMiningForm">
-                    <div class="form-group">
-                        <label>Start Time</label>
-                        <input type="time" id="freeStartTime" required>
-                    </div>
-                    <div class="form-group">
-                        <label>End Time</label>
-                        <input type="time" id="freeEndTime" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Amount (MMK)</label>
-                        <input type="number" id="freeAmount" placeholder="Enter amount" required>
-                    </div>
-                    <button type="submit" class="btn-primary">
-                        <i class="fas fa-save"></i> Save Setting
-                    </button>
-                </form>
-            </div>
+    <!-- Modals --><!-- Free Mining Modal - UPDATED -->
+<div id="freeMiningModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2><i class="fas fa-clock"></i> Free Mining Setting</h2>
+            <span class="close">&times;</span>
+        </div>
+        <div class="modal-body">
+            <form id="freeMiningForm">
+                <div class="form-group">
+                    <label>Duration (Hours)</label>
+                    <input type="number" id="freeDurationHours" min="1" max="168" placeholder="Enter duration in hours (e.g., 24)" required>
+                    <small class="text-muted">How long users can mine from when they start</small>
+                </div>
+                <div class="form-group">
+                    <label>Amount (MMK)</label>
+                    <input type="number" id="freeAmount" min="1" placeholder="Enter mining reward amount" required>
+                    <small class="text-muted">Total amount users will receive after completion</small>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-save"></i> Save Setting
+                </button>
+            </form>
         </div>
     </div>
+</div>
 
     <!-- Plan Modal -->
     <div id="planModal" class="modal">
